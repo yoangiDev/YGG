@@ -1,8 +1,15 @@
 import logging
-from sqlalchemy.orm import Session
+from collections.abc import Sequence
 
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+from ygg_core.domain.participant import ParticipantStats
+
+from app.crud.participants import link_snapshot, upsert_participants
+from app.db.models.participant import MatchParticipant
+from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
-from app.db.models.match import Match
+from app.db.models.snapshot_participant import SnapshotParticipant
 from app.schemas.snapshot import SnapshotDescriptionUpdate, SnapshotNotesUpdate
 
 logger = logging.getLogger(__name__)
@@ -11,39 +18,29 @@ logger = logging.getLogger(__name__)
 # ── SNAPSHOTS ──────────────────────────────────────────────────────────────────
 
 def get_snapshots_by_player(db: Session, player_id: int, user_id: int) -> list[Snapshot]:
-    """
-    Devuelve los snapshots de un jugador verificando que pertenece al usuario.
-    Ordenados del más reciente al más antiguo.
-    """
-    return (
-        db.query(Snapshot)
+    """Snapshots de un jugador del usuario, del más reciente al más antiguo."""
+    stmt = (
+        select(Snapshot)
         .join(Snapshot.player)
-        .filter(
-            Snapshot.player_id == player_id,
-            Snapshot.player.has(user_id=user_id),   # Seguridad: solo snapshots del usuario
-        )
+        .where(Snapshot.player_id == player_id, Player.user_id == user_id)
         .order_by(Snapshot.date_from.desc())
-        .all()
     )
+    return list(db.scalars(stmt))
 
 
 def get_snapshot_by_id(db: Session, snapshot_id: int, user_id: int) -> Snapshot | None:
     """Obtiene un snapshot por ID verificando que pertenece al usuario autenticado."""
-    return (
-        db.query(Snapshot)
+    stmt = (
+        select(Snapshot)
         .join(Snapshot.player)
-        .filter(
-            Snapshot.id == snapshot_id,
-            Snapshot.player.has(user_id=user_id),
-        )
-        .first()
+        .where(Snapshot.id == snapshot_id, Player.user_id == user_id)
     )
+    return db.scalars(stmt).first()
 
 
 def update_snapshot_description(
     db: Session, snapshot: Snapshot, data: SnapshotDescriptionUpdate
 ) -> Snapshot:
-    """Actualiza la descripción de un snapshot."""
     snapshot.description = data.description
     db.commit()
     db.refresh(snapshot)
@@ -53,7 +50,6 @@ def update_snapshot_description(
 def update_snapshot_notes(
     db: Session, snapshot: Snapshot, data: SnapshotNotesUpdate
 ) -> Snapshot:
-    """Actualiza las notas libres de un snapshot (edición inline desde la UI)."""
     snapshot.notes = data.notes
     db.commit()
     db.refresh(snapshot)
@@ -61,49 +57,38 @@ def update_snapshot_notes(
 
 
 def delete_snapshot(db: Session, snapshot: Snapshot) -> None:
-    """Elimina un snapshot; match_snapshots se borra por ON DELETE CASCADE del FK."""
+    """Elimina un snapshot; sus enlaces se borran por ON DELETE CASCADE. Las partidas se quedan."""
     db.delete(snapshot)
     db.commit()
-
-
-# ── MATCHES ────────────────────────────────────────────────────────────────────
-
-def get_matches_by_snapshot(
-    db: Session, snapshot_id: int, user_id: int
-) -> list[Match]:
-    """
-    Devuelve las partidas de un snapshot verificando que pertenece al usuario.
-    Ordenadas de la más reciente a la más antigua.
-    """
-    from app.db.models.match_snapshot import MatchSnapshot
-    
-    return (
-        db.query(Match)
-        .join(MatchSnapshot, MatchSnapshot.match_id == Match.id)
-        .join(Snapshot, Snapshot.id == MatchSnapshot.snapshot_id)
-        .join(Snapshot.player)
-        .filter(
-            MatchSnapshot.snapshot_id == snapshot_id,
-            Snapshot.player.has(user_id=user_id),
-        )
-        .order_by(Match.creation_time.desc())
-        .all()
-    )
 
 
 def get_latest_snapshot_for_player(
     db: Session, player_id: int, user_id: int
 ) -> Snapshot | None:
-    return (
-        db.query(Snapshot)
+    stmt = (
+        select(Snapshot)
         .join(Snapshot.player)
-        .filter(
-            Snapshot.player_id == player_id,
-            Snapshot.player.has(user_id=user_id),
-        )
+        .where(Snapshot.player_id == player_id, Player.user_id == user_id)
         .order_by(Snapshot.created_at.desc())
-        .first()
     )
+    return db.scalars(stmt).first()
+
+
+# ── PARTICIPANTES ──────────────────────────────────────────────────────────────
+
+def get_matches_by_snapshot(
+    db: Session, snapshot_id: int, user_id: int
+) -> list[MatchParticipant]:
+    """Partidas (del jugador) de un snapshot del usuario, de la más reciente a la más antigua."""
+    stmt = (
+        select(MatchParticipant)
+        .join(SnapshotParticipant, SnapshotParticipant.match_participant_id == MatchParticipant.id)
+        .join(Snapshot, Snapshot.id == SnapshotParticipant.snapshot_id)
+        .join(Player, Player.id == Snapshot.player_id)
+        .where(SnapshotParticipant.snapshot_id == snapshot_id, Player.user_id == user_id)
+        .order_by(MatchParticipant.creation_time.desc())
+    )
+    return list(db.scalars(stmt))
 
 
 def get_recent_matches_for_player(
@@ -112,73 +97,45 @@ def get_recent_matches_for_player(
     user_id: int,
     limit: int = 20,
     role_filter: str | None = None,
-) -> list[Match]:
+) -> list[MatchParticipant]:
     """Partidas recientes del snapshot más nuevo del jugador."""
     latest = get_latest_snapshot_for_player(db, player_id, user_id)
     if not latest:
         return []
 
-    matches = get_matches_by_snapshot(db, latest.id, user_id)
+    stmt = (
+        select(MatchParticipant)
+        .join(SnapshotParticipant, SnapshotParticipant.match_participant_id == MatchParticipant.id)
+        .where(SnapshotParticipant.snapshot_id == latest.id)
+        .order_by(MatchParticipant.creation_time.desc())
+        .limit(limit)
+    )
     if role_filter and role_filter.upper() != "ALL":
-        role = role_filter.upper()
-        matches = [
-            m for m in matches
-            if not m.player_role or m.player_role.upper() == role
-        ]
-    return matches[:limit]
+        stmt = stmt.where(
+            or_(MatchParticipant.player_role == role_filter.upper(), MatchParticipant.player_role == "UNKNOWN")
+        )
+    return list(db.scalars(stmt))
 
 
 def get_stored_match_ids_for_player(
     db: Session, player_id: int, user_id: int
 ) -> set[str]:
-    """Riot match_id strings already linked to the player's latest snapshot."""
+    """IDs de partida ya enlazados al snapshot más reciente del jugador."""
     latest = get_latest_snapshot_for_player(db, player_id, user_id)
     if not latest:
         return set()
-    matches = get_matches_by_snapshot(db, latest.id, user_id)
-    return {m.match_id for m in matches}
+    stmt = (
+        select(MatchParticipant.match_id)
+        .join(SnapshotParticipant, SnapshotParticipant.match_participant_id == MatchParticipant.id)
+        .where(SnapshotParticipant.snapshot_id == latest.id)
+    )
+    return set(db.scalars(stmt))
 
 
-def persist_matches_to_snapshot(
-    db: Session, snapshot: Snapshot, matches: list[Match]
+def persist_participants_to_snapshot(
+    db: Session, snapshot: Snapshot, participants: Sequence[ParticipantStats]
 ) -> None:
-    """Upsert match rows and link them to an existing snapshot."""
-    from sqlalchemy.exc import IntegrityError
-
-    from app.service.riot import copy_timeline_fields
-    from app.db.models.match_snapshot import MatchSnapshot
-
-    for match in matches:
-        existing_match = db.query(Match).filter(Match.match_id == match.match_id).first()
-
-        if existing_match:
-            copy_timeline_fields(existing_match, match)
-            if match.timeline_enriched:
-                existing_match.timeline_enriched = True
-            target = existing_match
-        else:
-            try:
-                sp = db.begin_nested()
-                db.add(match)
-                db.flush()
-                target = match
-            except IntegrityError:
-                sp.rollback()
-                existing_match = (
-                    db.query(Match).filter(Match.match_id == match.match_id).first()
-                )
-                if not existing_match:
-                    continue
-                copy_timeline_fields(existing_match, match)
-                if match.timeline_enriched:
-                    existing_match.timeline_enriched = True
-                target = existing_match
-
-        try:
-            sp = db.begin_nested()
-            db.add(MatchSnapshot(snapshot_id=snapshot.id, match_id=target.id))
-            sp.commit()
-        except IntegrityError:
-            sp.rollback()
-
+    """Guarda las partidas del jugador y las enlaza a un snapshot existente."""
+    ids = upsert_participants(db, participants)
+    link_snapshot(db, snapshot.id, ids.values())
     db.commit()

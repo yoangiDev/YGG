@@ -64,7 +64,7 @@ async def fetch_cutoffs_from_riot(region: str) -> tuple[int, int]:
 
 
 def get_cached_cutoffs(db: Session, platform: str) -> RankCutoff | None:
-    return db.query(RankCutoff).filter(RankCutoff.platform == platform).first()
+    return db.get(RankCutoff, platform)
 
 
 def is_stale(record: RankCutoff) -> bool:

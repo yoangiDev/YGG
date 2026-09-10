@@ -13,24 +13,18 @@ from app.crud.snapshot import (
     get_latest_snapshot_for_player,
     get_recent_matches_for_player,
     get_stored_match_ids_for_player,
-    persist_matches_to_snapshot,
+    persist_participants_to_snapshot,
 )
-from app.db.models.match import Match
+from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
-from app.service.riot import (
-    copy_timeline_fields,
-    create_secure_session,
-    participant_to_match,
-    player_ref,
-    riot_client,
-)
+from app.service.riot import copy_timeline_fields, create_secure_session, player_ref, riot_client
 
 logger = logging.getLogger(__name__)
 
 _MAX_CONSECUTIVE_RIOT_FAILURES = 2
 
 
-def needs_quest_reenrich(matches: list[Match]) -> bool:
+def needs_quest_reenrich(matches: list[MatchParticipant]) -> bool:
     """True if any S26 match is missing Role Quest data or reward item id."""
     for match in matches:
         if not is_s26_match(match.creation_time):
@@ -49,7 +43,7 @@ def get_stored_player_matches(
     *,
     limit: int = 20,
     role_filter: str | None = None,
-) -> list[Match]:
+) -> list[MatchParticipant]:
     """Latest matches from DB snapshot (no Riot calls)."""
     return get_recent_matches_for_player(
         db, player_id, user_id, limit=limit, role_filter=role_filter
@@ -59,7 +53,7 @@ def get_stored_player_matches(
 async def backfill_role_bound_items(
     db: Session,
     player: Player,
-    matches: list[Match],
+    matches: list[MatchParticipant],
     *,
     limit: int = 10,
 ) -> int:
@@ -103,7 +97,7 @@ async def backfill_role_bound_items(
 async def re_enrich_missing_quest_stats(
     db: Session,
     player: Player,
-    matches: list[Match],
+    matches: list[MatchParticipant],
     *,
     limit: int = 20,
 ) -> int:
@@ -168,11 +162,11 @@ async def sync_player_recent_matches(
     player: Player,
     user_id: int,
     limit: int = 20,
-) -> list[Match]:
+) -> list[MatchParticipant]:
     """Sync new ranked games from Riot and return stored matches."""
     role_filter = role_filter_for_player(player.role.value if player.role else None)
     latest = get_latest_snapshot_for_player(db, player.id, user_id)
-    new_matches: list[Match] = []
+    participants = []
 
     try:
         client = riot_client(player.region)
@@ -200,21 +194,20 @@ async def sync_player_recent_matches(
                     include_timeline=True,
                     max_new=limit,
                 )
-        new_matches = [participant_to_match(p) for p in participants]
     except Exception as exc:
         logger.warning(
             "[%s] Riot sync failed (%s); using stored matches.",
             player.game_name,
             exc,
         )
-        new_matches = []
+        participants = []
 
-    if new_matches and latest is not None:
-        persist_matches_to_snapshot(db, latest, new_matches)
+    if participants and latest is not None:
+        persist_participants_to_snapshot(db, latest, participants)
         logger.info(
             "[%s] Added %d matches to snapshot %d.",
             player.game_name,
-            len(new_matches),
+            len(participants),
             latest.id,
         )
 

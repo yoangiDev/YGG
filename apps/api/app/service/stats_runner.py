@@ -3,22 +3,13 @@ import time
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from ygg_core.domain.roles import role_filter_for_player
 
+from app.crud.participants import known_participants, link_snapshot, upsert_participants
+from app.db.models.job import Job
 from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
-from app.db.models.match import Match
-from app.db.models.match_snapshot import MatchSnapshot
-from app.db.models.job import Job
-from app.service.riot import (
-    copy_timeline_fields,
-    create_secure_session,
-    match_to_participant,
-    participant_to_match,
-    player_ref,
-    riot_client,
-)
+from app.service.riot import create_secure_session, participant_from_row, player_ref, riot_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +31,11 @@ class _ProgressBatcher:
         self._min_interval = min_interval
         self._last_commit = 0.0
         self._pending = 0
-        self._job = None
+        self._job: Job | None = None
 
-    def _get_job(self):
+    def _get_job(self) -> Job | None:
         if self._job is None and self._job_id:
-            self._job = self._db.query(Job).filter(Job.job_id == self._job_id).first()
+            self._job = self._db.get(Job, self._job_id)
         return self._job
 
     def update(self, progress: int) -> None:
@@ -80,8 +71,7 @@ async def run_stats_extraction(
     job_id: str | None = None,
 ) -> int:
     """
-    Orquesta el flujo completo de extracción de estadísticas para un jugador:
-    ygg-core descarga y calcula; aquí solo se persiste.
+    Analiza un período de un jugador: ygg-core descarga y calcula, aquí se persiste.
     """
     progress = _ProgressBatcher(db, job_id)
     client = riot_client(player.region)
@@ -90,16 +80,16 @@ async def run_stats_extraction(
     async with create_secure_session() as session:
         match_ids = await client.fetch_match_ids(session, player.puuid, date_from, date_to)
 
-        existing_rows: dict[str, Match] = {}
-        if match_ids:
-            rows = db.query(Match).filter(Match.match_id.in_(match_ids)).all()
-            existing_rows = {m.match_id: m for m in rows}
-            cached_count = sum(1 for m in rows if m.timeline_enriched)
-            if cached_count:
-                logger.info(
-                    f"[{player.game_name}] {cached_count}/{len(match_ids)} matches "
-                    "will be reused from DB (timeline_enriched)."
-                )
+        # Solo las filas de ESTE jugador sirven de caché: reutilizar la de otro
+        # participante de la misma partida era el bug P1.
+        known_rows = known_participants(db, player.puuid, match_ids)
+        known = {match_id: participant_from_row(row) for match_id, row in known_rows.items()}
+        cached_count = sum(1 for row in known_rows.values() if row.timeline_enriched)
+        if cached_count:
+            logger.info(
+                "[%s] %d/%d matches will be reused from DB (timeline_enriched).",
+                player.game_name, cached_count, len(match_ids),
+            )
 
         def _download_progress(completed: int, total: int):
             if total > 0:
@@ -112,7 +102,7 @@ async def run_stats_extraction(
             end_t=date_to,
             role_filter=role_value,
             on_progress=_download_progress,
-            known={mid: match_to_participant(row) for mid, row in existing_rows.items()},
+            known=known,
             match_ids=match_ids,
         )
 
@@ -120,6 +110,12 @@ async def run_stats_extraction(
 
     if not participants:
         raise ValueError("No matches found for the selected period and role.")
+
+    # Las que venían de la caché ya están guardadas tal cual: solo se escriben las nuevas.
+    fresh = [p for p in participants if known.get(p.match_id) is not p]
+    ids = {(row.match_id, row.puuid): row.id for row in known_rows.values()}
+    ids.update(upsert_participants(db, fresh))
+    progress.update(95)
 
     snapshot = Snapshot(
         player_id=player.id,
@@ -129,61 +125,19 @@ async def run_stats_extraction(
     )
     db.add(snapshot)
     db.flush()
-
-    total = len(participants)
-    links: list[MatchSnapshot] = []
-
-    for i, stats in enumerate(participants):
-        existing_match = existing_rows.get(stats.match_id)
-
-        if existing_match:
-            copy_timeline_fields(existing_match, stats)
-            target = existing_match
-        else:
-            match = participant_to_match(stats)
-            try:
-                sp = db.begin_nested()
-                db.add(match)
-                db.flush()
-                target = match
-            except IntegrityError:
-                sp.rollback()
-                existing_match = (
-                    db.query(Match).filter(Match.match_id == stats.match_id).first()
-                )
-                if not existing_match:
-                    continue
-                copy_timeline_fields(existing_match, stats)
-                target = existing_match
-
-        links.append(MatchSnapshot(snapshot_id=snapshot.id, match_id=target.id))
-        progress.update(90 + int(((i + 1) / total) * 9))
-
-    for link in links:
-        try:
-            sp = db.begin_nested()
-            db.add(link)
-            sp.commit()
-        except IntegrityError:
-            sp.rollback()
-            logger.warning(
-                f"Association link already exists for match_id={link.match_id} "
-                f"in snapshot {snapshot.id}"
-            )
+    link_snapshot(db, snapshot.id, (ids[(p.match_id, p.puuid)] for p in participants))
 
     db.commit()
     db.refresh(snapshot)
-    progress.flush()
 
     if job_id:
-        job = db.query(Job).filter(Job.job_id == job_id).first()
+        job = db.get(Job, job_id)
         if job:
             job.progress = 100
             db.commit()
 
     logger.info(
-        f"Snapshot {snapshot.id} created with {total} matches "
-        f"for player {player.game_name}#{player.tag_line}."
+        "Snapshot %d created with %d matches for player %s#%s.",
+        snapshot.id, len(participants), player.game_name, player.tag_line,
     )
-
     return snapshot.id

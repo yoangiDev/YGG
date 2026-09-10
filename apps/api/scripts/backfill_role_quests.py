@@ -10,10 +10,10 @@ from sqlalchemy import select
 from ygg_core.timeline.quests import is_s26_match
 
 import app.db.models  # noqa: F401
-from app.db.models.match import Match
-from app.db.models.match_snapshot import MatchSnapshot
+from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
+from app.db.models.snapshot_participant import SnapshotParticipant
 from app.db.session import SessionLocal
 from app.service.riot import copy_timeline_fields, create_secure_session, riot_client
 
@@ -21,20 +21,20 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-async def _backfill_rows(rows: list[tuple[Match, Player]]) -> int:
+async def _backfill_rows(rows: list[tuple[MatchParticipant, Player]]) -> int:
     updated = 0
     async with create_secure_session() as session:
-        for match, player in rows:
+        for participant, player in rows:
             client = riot_client(player.region)
             try:
-                stats = await client.fetch_participant(session, match.match_id, player.puuid)
+                stats = await client.fetch_participant(session, participant.match_id, player.puuid)
             except Exception as exc:
-                logger.warning("Failed %s: %s", match.match_id, exc)
+                logger.warning("Failed %s: %s", participant.match_id, exc)
                 continue
             if stats is None:
-                logger.warning("Skipping %s — fetch failed", match.match_id)
+                logger.warning("Skipping %s — fetch failed", participant.match_id)
                 continue
-            copy_timeline_fields(match, stats)
+            copy_timeline_fields(participant, stats)
             updated += 1
     return updated
 
@@ -43,20 +43,24 @@ def backfill(limit: int = 50, *, force: bool = False) -> None:
     db = SessionLocal()
     try:
         query = (
-            select(Match, Player)
-            .join(MatchSnapshot, MatchSnapshot.match_id == Match.id)
-            .join(Snapshot, Snapshot.id == MatchSnapshot.snapshot_id)
+            select(MatchParticipant, Player)
+            .join(SnapshotParticipant, SnapshotParticipant.match_participant_id == MatchParticipant.id)
+            .join(Snapshot, Snapshot.id == SnapshotParticipant.snapshot_id)
             .join(Player, Player.id == Snapshot.player_id)
-            .order_by(Match.creation_time.desc())
+            .order_by(MatchParticipant.creation_time.desc())
         )
         if not force:
-            query = query.where(Match.quest_completion_time.is_(None))
+            query = query.where(MatchParticipant.quest_completion_time.is_(None))
 
-        rows = [
-            (m, p)
-            for m, p in db.execute(query).unique().all()
-            if is_s26_match(m.creation_time)
-        ][:limit]
+        rows: list[tuple[MatchParticipant, Player]] = []
+        seen: set[int] = set()
+        for participant, player in db.execute(query):
+            if participant.id in seen or not is_s26_match(participant.creation_time):
+                continue
+            seen.add(participant.id)
+            rows.append((participant, player))
+            if len(rows) >= limit:
+                break
 
         if not rows:
             logger.info("No S26 matches need quest backfill.")

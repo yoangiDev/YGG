@@ -1,27 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
-from app.db.session import get_db, SessionLocal
-from app.db.models.user import User
-from app.db.models.job import Job
-from app.auth.dependencies import get_current_user
-from app.schemas.snapshot import (
-    SnapshotCreate, SnapshotResponse,
-    SnapshotDescriptionUpdate, SnapshotNotesUpdate,
-    SnapshotJobResponse, SnapshotJobStatus
-)
-from app.crud.player import get_player_by_id
-from app.crud.snapshot import (
-    get_snapshots_by_player, get_snapshot_by_id,
-    update_snapshot_description, update_snapshot_notes,
-    delete_snapshot
-)
-from app.service.stats_runner import run_stats_extraction
-
 import asyncio
 import uuid
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import get_current_user
+from app.crud.player import get_player_by_id
+from app.crud.snapshot import (
+    delete_snapshot,
+    get_snapshot_by_id,
+    get_snapshots_by_player,
+    update_snapshot_description,
+    update_snapshot_notes,
+)
+from app.db.models.job import Job
+from app.db.models.user import User
+from app.db.session import SessionLocal, get_db
+from app.schemas.snapshot import (
+    SnapshotCreate,
+    SnapshotDescriptionUpdate,
+    SnapshotJobResponse,
+    SnapshotJobStatus,
+    SnapshotNotesUpdate,
+    SnapshotResponse,
+)
+from app.service.stats_runner import run_stats_extraction
+
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
+
+# Referencias fuertes a los análisis en curso: sin ellas el event loop solo
+# guarda referencias débiles y una tarea puede desaparecer a mitad.
+_background_tasks: set[asyncio.Task] = set()
 
 
 # ── GET /snapshots/player/{player_id} ─────────────────────────────────────────
@@ -50,32 +60,27 @@ async def create_snapshot(
     """
     Lanza el análisis de un período para un jugador.
     Devuelve un job_id inmediatamente — el análisis corre en background.
-    Flutter hace polling sobre GET /snapshots/jobs/{job_id} hasta que status == 'done'.
     """
     player = get_player_by_id(db, snapshot_in.player_id, user_id=current_user.id)
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
 
     job_id = str(uuid.uuid4())
-    job = Job(job_id=job_id, status="processing")
-    db.add(job)
+    db.add(Job(job_id=job_id, user_id=current_user.id, status="processing"))
     db.commit()
 
-    # Pasamos solo el player_id, no el objeto ORM
-    # Así evitamos el DetachedInstanceError cuando la sesión del endpoint se cierre
-    asyncio.create_task(_run_analysis(job_id, player.id, current_user.id, snapshot_in))
+    # Se pasa el player_id y no el objeto ORM: la sesión de esta petición se cierra antes.
+    task = asyncio.create_task(_run_analysis(job_id, player.id, current_user.id, snapshot_in))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return SnapshotJobResponse(job_id=job_id)
 
 
 async def _run_analysis(job_id: str, player_id: int, user_id: int, snapshot_in: SnapshotCreate):
-    """
-    Tarea background con sesión de BBDD independiente.
-    Recibe player_id en lugar del objeto Player para evitar DetachedInstanceError.
-    """
+    """Tarea background con su propia sesión de BD."""
     db = SessionLocal()
     try:
-        # Recargamos el player dentro de nuestra propia sesión
         player = get_player_by_id(db, player_id, user_id=user_id)
         if not player:
             raise ValueError(f"Player {player_id} not found when starting analysis.")
@@ -89,7 +94,7 @@ async def _run_analysis(job_id: str, player_id: int, user_id: int, snapshot_in: 
             job_id=job_id,
         )
 
-        job = db.query(Job).filter(Job.job_id == job_id).first()
+        job = db.get(Job, job_id)
         if job:
             job.status = "done"
             job.snapshot_id = snapshot_id
@@ -97,7 +102,7 @@ async def _run_analysis(job_id: str, player_id: int, user_id: int, snapshot_in: 
 
     except Exception as e:
         db.rollback()
-        job = db.query(Job).filter(Job.job_id == job_id).first()
+        job = db.get(Job, job_id)
         if job:
             job.status = "error"
             job.error = str(e)
@@ -111,10 +116,10 @@ async def _run_analysis(job_id: str, player_id: int, user_id: int, snapshot_in: 
 @router.get("/jobs/{job_id}", response_model=SnapshotJobStatus)
 def get_job_status(job_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Devuelve el estado de un job de análisis.
-    Flutter hace polling cada 2s hasta que status == 'done' o 'error'.
+    Estado de un job de análisis. Solo lo ve quien lo lanzó: para cualquier
+    otro usuario responde 404, sin revelar que el job existe.
     """
-    job = db.query(Job).filter(Job.job_id == job_id).first()
+    job = db.scalar(select(Job).where(Job.job_id == job_id, Job.user_id == current_user.id))
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
     return SnapshotJobStatus(
@@ -181,7 +186,7 @@ def remove_snapshot(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Elimina un snapshot y todas sus partidas en cascada."""
+    """Elimina un snapshot; las partidas se conservan para otros snapshots."""
     snapshot = get_snapshot_by_id(db, snapshot_id, user_id=current_user.id)
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")

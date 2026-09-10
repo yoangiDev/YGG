@@ -1,16 +1,15 @@
 import bcrypt
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
-from app.db.models.user import User
+from app.db.models.match import Match
 from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
-from app.db.models.match import Match
+from app.db.models.user import User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -79,22 +78,24 @@ class GlobalStats(BaseModel):
     top_users: list[TopUser]
 
 
+class DeleteInactiveResult(BaseModel):
+    deleted: int
+
+
 # ── GET /admin/players/ ───────────────────────────────────────────────────────
 
-@router.get("/players/", response_model=List[AdminPlayerOut])
+@router.get("/players/", response_model=list[AdminPlayerOut])
 def list_all_players(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    rows = (
-        db.query(Player, User.username)
+    rows = db.execute(
+        select(Player, User.username)
         .join(User, User.id == Player.user_id)
         .order_by(User.username, Player.game_name)
-        .all()
-    )
-    result = []
-    for player, username in rows:
-        result.append(AdminPlayerOut(
+    ).all()
+    return [
+        AdminPlayerOut(
             id=player.id,
             game_name=player.game_name,
             tag_line=player.tag_line,
@@ -107,8 +108,9 @@ def list_all_players(
             wins=player.wins or 0,
             losses=player.losses or 0,
             owner_username=username,
-        ))
-    return result
+        )
+        for player, username in rows
+    ]
 
 
 # ── DELETE /admin/players/{id} ────────────────────────────────────────────────
@@ -119,7 +121,7 @@ def admin_delete_player(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    player = db.query(Player).filter(Player.id == player_id).first()
+    player = db.get(Player, player_id)
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
     db.delete(player)
@@ -133,60 +135,45 @@ def get_global_stats(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    total_users    = db.query(func.count(User.id)).scalar() or 0
-    active_users   = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
-    inactive_users = total_users - active_users
-    total_players  = db.query(func.count(Player.id)).scalar() or 0
-    total_snapshots= db.query(func.count(Snapshot.id)).scalar() or 0
-    total_matches  = db.query(func.count(Match.id)).scalar() or 0
+    total_users = db.scalar(select(func.count(User.id))) or 0
+    active_users = db.scalar(select(func.count(User.id)).where(User.is_active.is_(True))) or 0
+    player_count = func.count(Player.id)
 
-    tier_rows = (
-        db.query(Player.tier, func.count(Player.id))
-        .filter(Player.tier != "")
-        .group_by(Player.tier)
-        .all()
-    )
-    tier_distribution = [TierCount(tier=r[0], count=r[1]) for r in tier_rows]
-
-    region_rows = (
-        db.query(Player.region, func.count(Player.id))
-        .group_by(Player.region)
-        .order_by(func.count(Player.id).desc())
-        .all()
-    )
-    region_distribution = [RegionCount(region=r[0], count=r[1]) for r in region_rows]
-
-    top_rows = (
-        db.query(User.username, func.count(Player.id).label("player_count"))
-        .join(Player, Player.user_id == User.id, isouter=True)
+    tier_rows = db.execute(
+        select(Player.tier, player_count).where(Player.tier != "").group_by(Player.tier)
+    ).all()
+    region_rows = db.execute(
+        select(Player.region, player_count).group_by(Player.region).order_by(player_count.desc())
+    ).all()
+    top_rows = db.execute(
+        select(User.username, player_count)
+        .outerjoin(Player, Player.user_id == User.id)
         .group_by(User.id, User.username)
-        .order_by(func.count(Player.id).desc())
+        .order_by(player_count.desc())
         .limit(5)
-        .all()
-    )
-    top_users = [TopUser(username=r[0], player_count=r[1]) for r in top_rows]
+    ).all()
 
     return GlobalStats(
         total_users=total_users,
         active_users=active_users,
-        inactive_users=inactive_users,
-        total_players=total_players,
-        total_snapshots=total_snapshots,
-        total_matches=total_matches,
-        tier_distribution=tier_distribution,
-        region_distribution=region_distribution,
-        top_users=top_users,
+        inactive_users=total_users - active_users,
+        total_players=db.scalar(select(func.count(Player.id))) or 0,
+        total_snapshots=db.scalar(select(func.count(Snapshot.id))) or 0,
+        total_matches=db.scalar(select(func.count(Match.match_id))) or 0,
+        tier_distribution=[TierCount(tier=tier, count=count) for tier, count in tier_rows],
+        region_distribution=[RegionCount(region=region, count=count) for region, count in region_rows],
+        top_users=[TopUser(username=name, player_count=count) for name, count in top_rows],
     )
 
 
 # ── GET /admin/users/ ──────────────────────────────────────────────────────────
 
-@router.get("/users/", response_model=List[UserOut])
+@router.get("/users/", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return db.query(User).order_by(User.id).all()
+    return list(db.scalars(select(User).order_by(User.id)))
 
 
 # ── PATCH /admin/users/{id}/role ───────────────────────────────────────────────
@@ -208,7 +195,7 @@ def update_user_role(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid role. Use 'user' or 'admin'.",
         )
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     user.role = body.role
@@ -230,7 +217,7 @@ def toggle_user_active(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own account.",
         )
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     user.is_active = not user.is_active
@@ -241,24 +228,18 @@ def toggle_user_active(
 
 # ── DELETE /admin/users/inactive ─────────────────────────────────────────────
 
-class DeleteInactiveResult(BaseModel):
-    deleted: int
-
 @router.delete("/users/inactive", response_model=DeleteInactiveResult)
 def delete_inactive_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    inactive = (
-        db.query(User)
-        .filter(User.is_active == False, User.id != current_user.id)
-        .all()
+    inactive = list(
+        db.scalars(select(User).where(User.is_active.is_(False), User.id != current_user.id))
     )
-    count = len(inactive)
     for user in inactive:
         db.delete(user)
     db.commit()
-    return DeleteInactiveResult(deleted=count)
+    return DeleteInactiveResult(deleted=len(inactive))
 
 
 # ── DELETE /admin/users/{id} ──────────────────────────────────────────────────
@@ -274,7 +255,7 @@ def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot delete your own account.",
         )
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     db.delete(user)
@@ -294,12 +275,12 @@ def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid role. Use 'user' or 'admin'.",
         )
-    if db.query(User).filter(User.email == body.email).first():
+    if db.scalar(select(User.id).where(User.email == body.email)) is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This email is already registered.",
         )
-    if db.query(User).filter(User.username == body.username).first():
+    if db.scalar(select(User.id).where(User.username == body.username)) is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This username is already taken.",

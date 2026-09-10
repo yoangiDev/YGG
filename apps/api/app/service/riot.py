@@ -5,6 +5,7 @@ objetos de dominio del core (ParticipantStats) y los modelos ORM.
 """
 
 from dataclasses import MISSING, fields
+from typing import Any
 
 from ygg_core.domain.participant import (
     TIMELINE_FIELDS,
@@ -18,6 +19,7 @@ from ygg_core.riot.http import create_secure_session
 
 from app.core.config import settings
 from app.db.models.match import Match
+from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
 
 __all__ = [
@@ -25,16 +27,18 @@ __all__ = [
     "apply_summoner",
     "copy_timeline_fields",
     "create_secure_session",
-    "match_to_participant",
-    "participant_to_match",
+    "match_row",
+    "participant_from_row",
+    "participant_row",
     "player_ref",
     "riot_client",
 ]
 
-_MATCH_COLUMNS = {column.key for column in Match.__table__.columns} - {"id"}
-# Campos del dominio que existen como columna. puuid, participant_id, team_id,
-# queue_id y game_version no caben en la tabla ancha actual (llegan en la Fase 2).
-_SHARED_FIELDS = tuple(f for f in fields(ParticipantStats) if f.name in _MATCH_COLUMNS)
+_MATCH_COLUMNS = tuple(column.key for column in Match.__table__.columns)
+_PARTICIPANT_COLUMNS = tuple(
+    column.key for column in MatchParticipant.__table__.columns if column.key != "id"
+)
+_DOMAIN_FIELDS = fields(ParticipantStats)
 
 
 def riot_client(region: str) -> RiotAPIClient:
@@ -49,15 +53,23 @@ def player_ref(player: Player) -> PlayerRef:
     )
 
 
-def participant_to_match(stats: ParticipantStats) -> Match:
-    return Match(**{f.name: getattr(stats, f.name) for f in _SHARED_FIELDS})
+def match_row(stats: ParticipantStats) -> dict[str, Any]:
+    return {name: getattr(stats, name) for name in _MATCH_COLUMNS}
 
 
-def match_to_participant(match: Match) -> ParticipantStats:
-    """Fila ORM → dominio. Las columnas NULL toman el valor por defecto del dominio."""
+def participant_row(stats: ParticipantStats) -> dict[str, Any]:
+    return {name: getattr(stats, name) for name in _PARTICIPANT_COLUMNS}
+
+
+def participant_from_row(row: MatchParticipant) -> ParticipantStats:
+    """Fila ORM → dominio. Los valores NULL toman el valor por defecto del dominio.
+
+    duration, queue_id y game_version llegan de la partida a través de las
+    propiedades de MatchParticipant.
+    """
     values = {}
-    for f in _SHARED_FIELDS:
-        value = getattr(match, f.name)
+    for f in _DOMAIN_FIELDS:
+        value = getattr(row, f.name)
         if value is None:
             if f.default_factory is not MISSING:
                 value = f.default_factory()
@@ -67,7 +79,7 @@ def match_to_participant(match: Match) -> ParticipantStats:
     return ParticipantStats(**values)
 
 
-def copy_timeline_fields(target: Match, source: ParticipantStats | Match) -> None:
+def copy_timeline_fields(target: MatchParticipant, source: ParticipantStats | MatchParticipant) -> None:
     """Refresca en una fila existente las métricas derivadas del timeline."""
     for name in TIMELINE_FIELDS:
         setattr(target, name, getattr(source, name))

@@ -1,12 +1,15 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from ygg_core.domain.participant import ParticipantStats
 
-from app.db.models.match import Match
+from app.crud.participants import replace_history, upsert_participants
+from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
-from app.db.models.player_match_history import PlayerMatchHistory
+from app.db.models.player_history import PlayerHistoryEntry
 
 logger = logging.getLogger(__name__)
 
@@ -22,51 +25,21 @@ def is_history_fresh(player: Player) -> bool:
 
 def get_history_from_cache(
     db: Session, player_id: int, limit: int = DEFAULT_HISTORY_LIMIT
-) -> list[Match]:
-    return (
-        db.query(Match)
-        .join(PlayerMatchHistory, PlayerMatchHistory.match_id == Match.id)
-        .filter(PlayerMatchHistory.player_id == player_id)
-        .order_by(Match.creation_time.desc())
+) -> list[MatchParticipant]:
+    stmt = (
+        select(MatchParticipant)
+        .join(PlayerHistoryEntry, PlayerHistoryEntry.match_participant_id == MatchParticipant.id)
+        .where(PlayerHistoryEntry.player_id == player_id)
+        .order_by(MatchParticipant.creation_time.desc())
         .limit(limit)
-        .all()
     )
+    return list(db.scalars(stmt))
 
 
-def update_history_cache(db: Session, player: Player, matches: list[Match]) -> None:
-    """Upsert match_data rows, replace history entries for this player, update timestamp."""
-    persisted_ids: list[int] = []
-
-    for match in matches:
-        existing = db.query(Match).filter(Match.match_id == match.match_id).first()
-        if existing:
-            target = existing
-        else:
-            try:
-                sp = db.begin_nested()
-                db.add(match)
-                db.flush()
-                target = match
-            except IntegrityError:
-                sp.rollback()
-                target = db.query(Match).filter(Match.match_id == match.match_id).first()
-                if not target:
-                    continue
-        if target.id:
-            persisted_ids.append(target.id)
-
-    db.query(PlayerMatchHistory).filter(PlayerMatchHistory.player_id == player.id).delete()
-
-    for match_id in persisted_ids:
-        try:
-            sp = db.begin_nested()
-            db.add(PlayerMatchHistory(player_id=player.id, match_id=match_id))
-            sp.commit()
-        except IntegrityError:
-            sp.rollback()
-
+def update_history_cache(db: Session, player: Player, participants: Sequence[ParticipantStats]) -> None:
+    """Guarda las partidas, deja el historial con exactamente estas y renueva el TTL."""
+    ids = upsert_participants(db, participants)
+    replace_history(db, player.id, list(ids.values()))
     player.match_history_cached_at = datetime.now(timezone.utc)
-    db.add(player)
     db.commit()
-
-    logger.info("[%s] History cache updated with %d matches.", player.game_name, len(persisted_ids))
+    logger.info("[%s] History cache updated with %d matches.", player.game_name, len(ids))

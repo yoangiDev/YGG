@@ -1,25 +1,32 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.db.models.player import Player
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id                  = Column(Integer, primary_key=True, index=True)
-    email               = Column(String(255), unique=True, nullable=False, index=True)
-    username            = Column(String(50), unique=True, nullable=False)
-    hashed_password     = Column(String(255), nullable=False)
-    role                = Column(String(20), nullable=False, default='user', server_default='user')
-    is_active           = Column(Boolean, default=True)
-    created_at          = Column(DateTime(timezone=True), server_default=func.now())
-    avatar_url          = Column(String(500), nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
+    is_active: Mapped[bool | None] = mapped_column(default=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
 
-    # ── Relaciones ─────────────────────────────────────────────────────────────
-    players = relationship(
-        "Player",
+    players: Mapped[list[Player]] = relationship(
         back_populates="owner",
-        cascade="all, delete-orphan"  # Si se borra el user, se borran sus jugadores
+        cascade="all, delete-orphan",  # Si se borra el user, se borran sus jugadores
     )

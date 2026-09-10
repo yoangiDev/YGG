@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
+from sqlalchemy import select
 from ygg_core.domain.roles import normalize_role
 from ygg_core.timeline.quests import (
     ADC_ROLE_BOUND_ITEMS,
@@ -78,7 +79,7 @@ def main() -> None:
     region = sys.argv[2] if len(sys.argv) > 2 else "euw"
     if not match_id:
         db = SessionLocal()
-        row = db.query(Match).order_by(Match.creation_time.desc()).first()
+        row = db.scalars(select(Match).order_by(Match.creation_time.desc()).limit(1)).first()
         db.close()
         match_id = row.match_id if row else "EUW1_7867262819"
     asyncio.run(inspect_match(match_id, region))

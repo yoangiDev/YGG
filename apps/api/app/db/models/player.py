@@ -1,8 +1,17 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Enum, UniqueConstraint, DateTime
-from sqlalchemy.orm import relationship
+from __future__ import annotations
+
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.db.models.snapshot import Snapshot
+    from app.db.models.user import User
 
 
 class RoleEnum(enum.Enum):
@@ -20,42 +29,36 @@ class Player(Base):
         UniqueConstraint("user_id", "puuid", name="uq_players_user_puuid"),
     )
 
-    id              = Column(Integer, primary_key=True, index=True)
-    user_id         = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    puuid           = Column(String(100), nullable=False)
-    game_name       = Column(String(50), nullable=False)
-    tag_line        = Column(String(10), nullable=False)
-    region          = Column(String(10), nullable=False)
-    nickname        = Column(String(20), default="")
-    role            = Column(Enum(RoleEnum), default=RoleEnum.ALL, nullable=False)
-    notes           = Column(Text, default="")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    puuid: Mapped[str] = mapped_column(String(100))
+    game_name: Mapped[str] = mapped_column(String(50))
+    tag_line: Mapped[str] = mapped_column(String(10))
+    region: Mapped[str] = mapped_column(String(10))
+    nickname: Mapped[str | None] = mapped_column(String(20), default="")
+    role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.ALL)
+    notes: Mapped[str | None] = mapped_column(Text, default="")
 
     # Datos de rango — se actualizan periódicamente desde la Riot API
-    tier            = Column(String(20), default="")
-    rank            = Column(String(5), default="")
-    lp              = Column(Integer, default=0)
-    profile_icon_id = Column(Integer, default=0)  # ID del icono de invocador (Data Dragon)
-    wins = Column(Integer, default=0)
-    losses = Column(Integer, default=0)
-    match_history_cached_at = Column(DateTime(timezone=True), nullable=True)
+    tier: Mapped[str | None] = mapped_column(String(20), default="")
+    rank: Mapped[str | None] = mapped_column(String(5), default="")
+    lp: Mapped[int | None] = mapped_column(default=0)
+    profile_icon_id: Mapped[int | None] = mapped_column(default=0)  # icono de invocador (Data Dragon)
+    wins: Mapped[int | None] = mapped_column(default=0)
+    losses: Mapped[int | None] = mapped_column(default=0)
+    match_history_cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    owner: Mapped[User] = relationship(back_populates="players")
+    snapshots: Mapped[list[Snapshot]] = relationship(
+        back_populates="player",
+        cascade="all, delete-orphan",  # Si se borra el jugador, se borran sus snapshots
+    )
 
     @property
     def win_rate(self) -> float:
-        # Usamos "or 0" para convertir None en 0 antes de calcular
-        w = self.wins or 0
-        l = self.losses or 0
-        total = w + l
+        wins = self.wins or 0
+        losses = self.losses or 0
+        total = wins + losses
         if total == 0:
             return 0.0
-        return round((w / total) * 100, 2)
-
-    # ── Relaciones ─────────────────────────────────────────────────────────────
-    owner = relationship(
-        "User",
-        back_populates="players"
-    )
-    snapshots = relationship(
-        "Snapshot",
-        back_populates="player",
-        cascade="all, delete-orphan"  # Si se borra el jugador, se borran sus snapshots
-    )
+        return round((wins / total) * 100, 2)

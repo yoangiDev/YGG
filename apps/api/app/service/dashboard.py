@@ -8,8 +8,7 @@ from ygg_core.domain.participant import PlayerRef
 from ygg_core.domain.roles import dashboard_role
 from ygg_core.metrics.dashboard import comparison_dataset, compute_dashboard
 
-from app.db.models.match import Match
-from app.db.models.match_snapshot import MatchSnapshot
+from app.crud.participants import participants_for_snapshot
 from app.db.models.snapshot import Snapshot
 from app.schemas.dashboard import (
     ChampionStatsResponse,
@@ -20,7 +19,7 @@ from app.schemas.dashboard import (
 )
 from app.schemas.match import MatchResponse
 from app.service.ddragon_client import FALLBACK_VERSION, get_ddragon_client
-from app.service.riot import create_secure_session, match_to_participant, riot_client
+from app.service.riot import create_secure_session, participant_from_row, riot_client
 
 logger = logging.getLogger(__name__)
 
@@ -56,23 +55,16 @@ async def build_snapshot_dashboard(
     compare_tag_line: str | None = None,
     compare_region: str | None = None,
 ) -> SnapshotDashboardResponse:
-    matches = (
-        db.query(Match)
-        .join(MatchSnapshot, MatchSnapshot.match_id == Match.id)
-        .filter(MatchSnapshot.snapshot_id == snapshot.id)
-        .all()
-    )
+    rows = participants_for_snapshot(db, snapshot.id)
     player = snapshot.player
     role = dashboard_role(player.role.value if player.role else None)
-    metrics = compute_dashboard(
-        [match_to_participant(m) for m in matches], role, player.game_name
-    )
+    metrics = compute_dashboard([participant_from_row(r) for r in rows], role, player.game_name)
 
     ddragon = await get_ddragon_client()
     version = ddragon.version or FALLBACK_VERSION
 
     radar = RadarChartData.model_validate(asdict(metrics.radar))
-    if matches and compare_game_name and compare_tag_line:
+    if rows and compare_game_name and compare_tag_line:
         radar.pro_datasets = await _comparison_radar(
             compare_game_name,
             compare_tag_line,
@@ -97,6 +89,6 @@ async def build_snapshot_dashboard(
             )
             for champion in metrics.played_champions
         ],
-        matches=[MatchResponse.model_validate(m) for m in matches],
+        matches=[MatchResponse.model_validate(r) for r in rows],
         radar_data=radar,
     )

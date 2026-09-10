@@ -1,13 +1,14 @@
-import bcrypt
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+import bcrypt
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db, settings
-from app.db.models.user import User
-from app.auth.jwt import create_access_token
 from app.auth.dependencies import get_current_user
-from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse, ChangePasswordRequest
+from app.auth.jwt import create_access_token
+from app.db.models.user import User
+from app.db.session import get_db, settings
+from app.schemas.auth import ChangePasswordRequest, TokenResponse, UserLogin, UserRegister, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,13 +25,13 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(user_in: UserRegister, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user_in.email).first():
+    if db.scalar(select(User.id).where(User.email == user_in.email)) is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This email is already registered."
         )
 
-    if db.query(User).filter(User.username == user_in.username).first():
+    if db.scalar(select(User.id).where(User.username == user_in.username)) is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This username is already taken."
@@ -52,7 +53,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first()
+    user = db.scalar(select(User).where(User.email == credentials.email))
 
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(

@@ -1,10 +1,11 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.db.models.user import User
 from app.auth.jwt import decode_access_token
+from app.db.models.user import User
+from app.db.session import get_db
 
 # Esquema de seguridad — extrae el token del header Authorization: Bearer <token>
 bearer_scheme = HTTPBearer()
@@ -17,9 +18,6 @@ def get_current_user(
     """
     Dependencia que protege los endpoints autenticados.
     Extrae el token JWT del header, lo valida y devuelve el usuario.
-
-    Uso en routers:
-        current_user: User = Depends(get_current_user)
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -31,7 +29,7 @@ def get_current_user(
     if user_id is None:
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    user = db.scalar(select(User).where(User.id == user_id, User.is_active.is_(True)))
     if user is None:
         raise credentials_exception
 

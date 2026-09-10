@@ -1,5 +1,6 @@
 import logging
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ygg_core.riot.errors import RiotNotFoundError
@@ -68,35 +69,24 @@ async def create_player(db: Session, player_in: PlayerCreate, user_id: int) -> P
 
 def get_player_by_id(db: Session, player_id: int, user_id: int) -> Player | None:
     """Obtiene un jugador por ID verificando que pertenece al usuario autenticado."""
-    return (
-        db.query(Player)
-        .filter(Player.id == player_id, Player.user_id == user_id)
-        .first()
-    )
+    return db.scalar(select(Player).where(Player.id == player_id, Player.user_id == user_id))
 
 
 def get_all_players(db: Session, user_id: int) -> list[Player]:
     """Devuelve todos los jugadores del usuario autenticado."""
-    return (
-        db.query(Player)
-        .filter(Player.user_id == user_id)
-        .order_by(Player.nickname)
-        .all()
-    )
+    return list(db.scalars(select(Player).where(Player.user_id == user_id).order_by(Player.nickname)))
 
 
 def get_player_by_riot_id(
     db: Session, game_name: str, tag_line: str, user_id: int
 ) -> Player | None:
     """Busca un jugador por su Riot ID dentro de los jugadores del usuario."""
-    return (
-        db.query(Player)
-        .filter(
+    return db.scalar(
+        select(Player).where(
             Player.game_name == game_name,
-            Player.tag_line  == tag_line,
-            Player.user_id   == user_id,
+            Player.tag_line == tag_line,
+            Player.user_id == user_id,
         )
-        .first()
     )
 
 
