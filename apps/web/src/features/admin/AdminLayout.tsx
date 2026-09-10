@@ -1,7 +1,7 @@
 import { ChartNoAxesColumn, Swords, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router";
 
-import { PageHeader } from "@/app/AppLayout";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 
 const TABS = [

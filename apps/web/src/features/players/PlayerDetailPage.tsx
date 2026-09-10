@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, GitCompareArrows, RefreshCw, Sparkles, Trash } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState, type ComponentProps } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { NotFound } from "@/app/RouteError";
@@ -11,7 +11,6 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select, Textarea } from "@/components/ui/Field";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
-import { CreateSnapshotDialog } from "@/features/snapshots/CreateSnapshotDialog";
 import { api, isApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { formatDate, formatDuration, formatNumber, formatPercent, formatSigned, timeAgo } from "@/lib/format";
@@ -23,6 +22,20 @@ import { PLAYABLE_ROLES, regionLabel, roleLabel, type Role } from "@/lib/roles";
 import { kdaTone, toneText, winRateTone } from "@/lib/stats";
 
 import { playerUpdate, updateCachedPlayer } from "./cache";
+
+// El formulario de análisis (zod, react-hook-form, SSE) se descarga al abrir el diálogo.
+const LazyCreateSnapshotDialog = lazy(() =>
+  import("@/features/snapshots/CreateSnapshotDialog").then((m) => ({ default: m.CreateSnapshotDialog })),
+);
+
+function CreateSnapshotDialog(props: ComponentProps<typeof LazyCreateSnapshotDialog>) {
+  if (!props.open) return null;
+  return (
+    <Suspense fallback={null}>
+      <LazyCreateSnapshotDialog {...props} />
+    </Suspense>
+  );
+}
 
 type Player = Schemas["PlayerResponse"];
 type Snapshot = Schemas["SnapshotResponse"];

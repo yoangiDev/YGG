@@ -17,14 +17,16 @@ export interface MockOptions {
   admin?: boolean;
   /** Deja pasar las imágenes del CDN de Riot (para capturas); por defecto se bloquean. */
   allowCdn?: boolean;
+  /** Sesión ya iniciada (cookie de refresh válida), para abrir rutas profundas directamente. */
+  signedIn?: boolean;
 }
 
 /**
  * API simulada con page.route. La web se construye con VITE_API_URL=/api, así
  * que todas las llamadas son del mismo origen y no hay CORS de por medio.
  */
-export async function mockApi(target: Page, { admin = false, allowCdn = false }: MockOptions = {}) {
-  let signedIn = false;
+export async function mockApi(target: Page, { admin = false, allowCdn = false, signedIn = false }: MockOptions = {}) {
+  let session = signedIn;
   const me = admin ? data.adminUser : data.user;
 
   await target.route("**/api/**", (route) => {
@@ -42,12 +44,12 @@ export async function mockApi(target: Page, { admin = false, allowCdn = false }:
 
     switch (key) {
       case "POST /auth/refresh":
-        return signedIn ? json(route, data.token) : route.fulfill({ status: 401 });
+        return session ? json(route, data.token) : route.fulfill({ status: 401 });
       case "POST /auth/login":
-        signedIn = true;
+        session = true;
         return json(route, data.token);
       case "POST /auth/logout":
-        signedIn = false;
+        session = false;
         return route.fulfill({ status: 204 });
       case "GET /auth/me":
         return json(route, me);

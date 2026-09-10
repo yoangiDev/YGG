@@ -2,12 +2,13 @@ import { createBrowserRouter, Navigate } from "react-router";
 
 import { FullPageLoader, RequireAdmin, RequireAuth } from "@/features/auth/guards";
 
-import { AppLayout } from "./AppLayout";
 import { NotFound, RouteError } from "./RouteError";
 
 /**
- * Cada pantalla es un chunk aparte (route.lazy): el login no descarga Recharts
- * ni TanStack Table, y el panel de administración solo lo baja quien lo abre.
+ * Cada pantalla es un chunk aparte (route.lazy), y también el marco de la app:
+ * el login no descarga Recharts, TanStack Table ni los menús de Radix, y el
+ * panel de administración solo lo baja quien lo abre. React Router pide el chunk
+ * de la ruta en paralelo con la comprobación de sesión.
  */
 export const router = createBrowserRouter([
   {
@@ -22,7 +23,7 @@ export const router = createBrowserRouter([
     hydrateFallbackElement: <FullPageLoader />,
     children: [
       {
-        element: <AppLayout />,
+        lazy: () => import("./AppLayout").then((m) => ({ Component: m.AppLayout })),
         children: [
           {
             errorElement: <RouteError />,

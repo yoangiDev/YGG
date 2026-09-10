@@ -2,7 +2,7 @@ import { ArrowLeft, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
-import { PageHeader } from "@/app/AppLayout";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { NotFound } from "@/app/RouteError";
 import { PerformanceRadar } from "@/components/charts/PerformanceRadar";
 import { Card, CardHeader, Skeleton } from "@/components/ui/Card";

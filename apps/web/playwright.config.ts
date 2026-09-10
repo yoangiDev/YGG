@@ -8,6 +8,9 @@ const isCI = Boolean(process.env.CI);
  * Por defecto las pruebas construyen la web con VITE_API_URL=/api y simulan la
  * API con page.route: son deterministas y no necesitan Postgres, Redis ni una
  * clave de Riot. Con E2E_BASE_URL se lanzan contra un despliegue real.
+ *
+ * El build se sirve con scripts/serve-dist.mjs (compresión y caché como en
+ * producción) y no con `vite preview`, que no comprime.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -30,9 +33,9 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: `npm run build && npx vite preview --host 127.0.0.1 --port ${PORT} --strictPort`,
+          command: "npm run build && node scripts/serve-dist.mjs",
           url: `http://127.0.0.1:${PORT}`,
-          env: { VITE_API_URL: "/api" },
+          env: { VITE_API_URL: "/api", PORT: String(PORT) },
           reuseExistingServer: !isCI,
           timeout: 180_000,
         },

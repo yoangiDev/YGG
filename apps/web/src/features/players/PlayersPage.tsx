@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Search, Trash, Users } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useMemo, useState, type ComponentProps } from "react";
 import { Link } from "react-router";
 
-import { PageHeader } from "@/app/AppLayout";
 import { ProfileIcon, RankBadge, RoleIcon, WinRate } from "@/components/player/PlayerBits";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input, Select } from "@/components/ui/Field";
 import { Tooltip } from "@/components/ui/Overlay";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -17,8 +17,19 @@ import { queryKeys } from "@/lib/queryKeys";
 import { rankScore } from "@/lib/rank";
 import { regionLabel } from "@/lib/roles";
 
-import { AddPlayerDialog } from "./AddPlayerDialog";
 import { updateCachedPlayer } from "./cache";
+
+// El alta arrastra zod y react-hook-form: se descarga al abrir el diálogo, no antes de pintar la tabla.
+const LazyAddPlayerDialog = lazy(() => import("./AddPlayerDialog").then((m) => ({ default: m.AddPlayerDialog })));
+
+function AddPlayerDialog(props: ComponentProps<typeof LazyAddPlayerDialog>) {
+  if (!props.open) return null;
+  return (
+    <Suspense fallback={null}>
+      <LazyAddPlayerDialog {...props} />
+    </Suspense>
+  );
+}
 
 type Player = Schemas["PlayerResponse"];
 type SortKey = "rank" | "name" | "recent";

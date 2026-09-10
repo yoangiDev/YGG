@@ -1,15 +1,14 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { ArrowLeft, GitCompareArrows, Trash } from "lucide-react";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState, type ComponentProps } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
-import { PageHeader } from "@/app/AppLayout";
 import { NotFound } from "@/app/RouteError";
 import { DeathHeatmap } from "@/components/charts/DeathHeatmap";
 import { DeathsByPhase } from "@/components/charts/DeathsByPhase";
 import { MetricGrid } from "@/components/charts/MetricGrid";
-import { PerformanceRadar, type RadarSeries } from "@/components/charts/PerformanceRadar";
-import { TrendChart } from "@/components/charts/TrendChart";
+import type { RadarSeries } from "@/components/charts/PerformanceRadar";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ChampionIcon } from "@/components/player/PlayerBits";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Card, CardHeader, Skeleton } from "@/components/ui/Card";
@@ -31,8 +30,39 @@ import { parseRiotId } from "@/lib/riotId";
 import { REGIONS, roleLabel } from "@/lib/roles";
 import { toneText, winRateTone } from "@/lib/stats";
 
-import { MatchTable } from "./MatchTable";
 import { compareKey, fetchDashboard, useSnapshotMatches, type CompareTarget, type Dashboard, type Match } from "./queries";
+
+// Recharts y TanStack Table van en chunks aparte: las tarjetas de métricas se pintan en cuanto llegan
+// los datos, sin esperar a las librerías de gráficas y tablas.
+const LazyPerformanceRadar = lazy(() =>
+  import("@/components/charts/PerformanceRadar").then((m) => ({ default: m.PerformanceRadar })),
+);
+const LazyTrendChart = lazy(() => import("@/components/charts/TrendChart").then((m) => ({ default: m.TrendChart })));
+const LazyMatchTable = lazy(() => import("./MatchTable").then((m) => ({ default: m.MatchTable })));
+
+function PerformanceRadar(props: ComponentProps<typeof LazyPerformanceRadar>) {
+  return (
+    <Suspense fallback={<Skeleton className="h-[340px] w-full rounded-lg" />}>
+      <LazyPerformanceRadar {...props} />
+    </Suspense>
+  );
+}
+
+function TrendChart(props: ComponentProps<typeof LazyTrendChart>) {
+  return (
+    <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-lg" />}>
+      <LazyTrendChart {...props} />
+    </Suspense>
+  );
+}
+
+function MatchTable(props: ComponentProps<typeof LazyMatchTable>) {
+  return (
+    <Suspense fallback={<Skeleton className="m-4 h-96 rounded-lg" />}>
+      <LazyMatchTable {...props} />
+    </Suspense>
+  );
+}
 
 export function SnapshotPage() {
   const params = useParams();

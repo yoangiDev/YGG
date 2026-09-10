@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useSearchParams } from "react-router";
 
-import { PageHeader } from "@/app/AppLayout";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { RankEmblem } from "@/components/player/PlayerBits";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
