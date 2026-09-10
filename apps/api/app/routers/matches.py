@@ -19,9 +19,8 @@ from app.schemas.match import (
     SnapshotStatsResponse,
 )
 from app.service.ddragon_client import DDragonClient, get_ddragon_client
-from app.service.http_client import create_secure_session
 from app.service.match_history import get_history_from_cache, is_history_fresh, update_history_cache
-from app.service.riot_client import RiotAPIClient
+from app.service.riot import create_secure_session, participant_to_match, player_ref, riot_client
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +56,17 @@ async def list_live_matches(
         if cached:
             return _to_responses(cached)
 
-    client = RiotAPIClient(region=player.region)
     try:
+        client = riot_client(player.region)
         async with create_secure_session() as session:
-            matches = await client.fetch_matches(
-                session=session,
-                player=player,
+            participants = await client.fetch_participants(
+                session,
+                player_ref(player),
                 max_matches=limit,
                 role_filter=None,
                 include_timeline=False,
             )
+        matches = [participant_to_match(p) for p in participants]
         if matches:
             update_history_cache(db, player, matches)
             return _to_responses(matches)

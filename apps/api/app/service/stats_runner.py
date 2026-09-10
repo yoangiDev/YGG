@@ -4,14 +4,21 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from ygg_core.domain.roles import role_filter_for_player
 
 from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
 from app.db.models.match import Match
 from app.db.models.match_snapshot import MatchSnapshot
 from app.db.models.job import Job
-from app.service.http_client import create_secure_session
-from app.service.riot_client import RiotAPIClient, copy_timeline_fields
+from app.service.riot import (
+    copy_timeline_fields,
+    create_secure_session,
+    match_to_participant,
+    participant_to_match,
+    player_ref,
+    riot_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,28 +80,21 @@ async def run_stats_extraction(
     job_id: str | None = None,
 ) -> int:
     """
-    Orquesta el flujo completo de extracción de estadísticas para un jugador.
+    Orquesta el flujo completo de extracción de estadísticas para un jugador:
+    ygg-core descarga y calcula; aquí solo se persiste.
     """
     progress = _ProgressBatcher(db, job_id)
-
-    client = RiotAPIClient(region=player.region.lower())
+    client = riot_client(player.region)
+    role_value = role_filter_for_player(player.role.value if player.role else None)
 
     async with create_secure_session() as session:
-        role_value = player.role.value if player.role else "ALL"
-        if role_value == "BOTTOM":
-            role_value = "ADC"
+        match_ids = await client.fetch_match_ids(session, player.puuid, date_from, date_to)
 
-        match_ids = await client._fetch_match_ids(
-            session, player.puuid, date_from, date_to, max_matches=None
-        )
-
-        known_matches: dict[str, Match] = {}
+        existing_rows: dict[str, Match] = {}
         if match_ids:
-            existing_rows = db.query(Match).filter(Match.match_id.in_(match_ids)).all()
-            known_matches = {m.match_id: m for m in existing_rows}
-            cached_count = sum(
-                1 for m in known_matches.values() if m.timeline_enriched
-            )
+            rows = db.query(Match).filter(Match.match_id.in_(match_ids)).all()
+            existing_rows = {m.match_id: m for m in rows}
+            cached_count = sum(1 for m in rows if m.timeline_enriched)
             if cached_count:
                 logger.info(
                     f"[{player.game_name}] {cached_count}/{len(match_ids)} matches "
@@ -105,20 +105,20 @@ async def run_stats_extraction(
             if total > 0:
                 progress.update(int((completed / total) * 90))
 
-        matches: list[Match] = await client.fetch_matches(
-            session=session,
-            player=player,
+        participants = await client.fetch_participants(
+            session,
+            player_ref(player),
             start_t=date_from,
             end_t=date_to,
             role_filter=role_value,
             on_progress=_download_progress,
-            known_matches=known_matches,
+            known={mid: match_to_participant(row) for mid, row in existing_rows.items()},
             match_ids=match_ids,
         )
 
     progress.flush()
 
-    if not matches:
+    if not participants:
         raise ValueError("No matches found for the selected period and role.")
 
     snapshot = Snapshot(
@@ -130,18 +130,17 @@ async def run_stats_extraction(
     db.add(snapshot)
     db.flush()
 
-    total = len(matches)
+    total = len(participants)
     links: list[MatchSnapshot] = []
 
-    for i, match in enumerate(matches):
-        existing_match = db.query(Match).filter(Match.match_id == match.match_id).first()
+    for i, stats in enumerate(participants):
+        existing_match = existing_rows.get(stats.match_id)
 
         if existing_match:
-            copy_timeline_fields(existing_match, match)
-            if match.timeline_enriched:
-                existing_match.timeline_enriched = True
+            copy_timeline_fields(existing_match, stats)
             target = existing_match
         else:
+            match = participant_to_match(stats)
             try:
                 sp = db.begin_nested()
                 db.add(match)
@@ -150,15 +149,12 @@ async def run_stats_extraction(
             except IntegrityError:
                 sp.rollback()
                 existing_match = (
-                    db.query(Match).filter(Match.match_id == match.match_id).first()
+                    db.query(Match).filter(Match.match_id == stats.match_id).first()
                 )
-                if existing_match:
-                    copy_timeline_fields(existing_match, match)
-                    if match.timeline_enriched:
-                        existing_match.timeline_enriched = True
-                    target = existing_match
-                else:
+                if not existing_match:
                     continue
+                copy_timeline_fields(existing_match, stats)
+                target = existing_match
 
         links.append(MatchSnapshot(snapshot_id=snapshot.id, match_id=target.id))
         progress.update(90 + int(((i + 1) / total) * 9))
@@ -186,7 +182,7 @@ async def run_stats_extraction(
             db.commit()
 
     logger.info(
-        f"Snapshot {snapshot.id} created with {len(matches)} matches "
+        f"Snapshot {snapshot.id} created with {total} matches "
         f"for player {player.game_name}#{player.tag_line}."
     )
 

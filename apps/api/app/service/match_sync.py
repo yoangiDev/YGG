@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy.orm import Session
+from ygg_core.domain.roles import role_filter_for_player
+from ygg_core.riot.parsers import role_bound_item_for
+from ygg_core.timeline.quests import is_s26_match
 
 from app.crud.snapshot import (
     get_latest_snapshot_for_player,
@@ -14,9 +17,13 @@ from app.crud.snapshot import (
 )
 from app.db.models.match import Match
 from app.db.models.player import Player
-from app.service.http_client import create_secure_session
-from app.service.role_quest_parser import is_s26_match
-from app.service.riot_client import RiotAPIClient
+from app.service.riot import (
+    copy_timeline_fields,
+    create_secure_session,
+    participant_to_match,
+    player_ref,
+    riot_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,28 +71,24 @@ async def backfill_role_bound_items(
     if not candidates:
         return 0
 
-    client = RiotAPIClient(region=player.region)
+    client = riot_client(player.region)
     updated = 0
     failures = 0
     async with create_secure_session() as session:
         for match in candidates:
-            match_data = await client._fetch_single_match(session, match.match_id)
+            match_data = await client.fetch_match(session, match.match_id)
             if not match_data:
                 failures += 1
                 if failures >= _MAX_CONSECUTIVE_RIOT_FAILURES:
                     break
                 continue
             failures = 0
-            try:
-                part = next(
-                    p for p in match_data["info"]["participants"]
-                    if p["puuid"] == player.puuid
-                )
-                match.role_bound_item = part.get("roleBoundItem") or 0
-                db.add(match)
-                updated += 1
-            except StopIteration:
+            item = role_bound_item_for(match_data, player.puuid)
+            if item is None:
                 continue
+            match.role_bound_item = item
+            db.add(match)
+            updated += 1
 
     if updated:
         db.commit()
@@ -116,14 +119,22 @@ async def re_enrich_missing_quest_stats(
     if not candidates:
         return 0
 
-    client = RiotAPIClient(region=player.region)
+    client = riot_client(player.region)
     updated = 0
     consecutive_failures = 0
     async with create_secure_session() as session:
         for match in candidates:
-            timeline = await client._fetch_timeline(session, match.match_id)
-            match_data = await client._fetch_single_match(session, match.match_id)
-            if not timeline or not match_data:
+            try:
+                stats = await client.fetch_participant(session, match.match_id, player.puuid)
+            except Exception as exc:
+                logger.warning(
+                    "[%s] Quest re-enrich failed %s: %s",
+                    player.game_name,
+                    match.match_id,
+                    exc,
+                )
+                continue
+            if stats is None:
                 consecutive_failures += 1
                 logger.warning(
                     "[%s] Quest re-enrich skipped %s",
@@ -138,19 +149,9 @@ async def re_enrich_missing_quest_stats(
                     break
                 continue
             consecutive_failures = 0
-            try:
-                client._apply_timeline_to_match(
-                    match, match_data, timeline, player.puuid
-                )
-                db.add(match)
-                updated += 1
-            except Exception as exc:
-                logger.warning(
-                    "[%s] Quest re-enrich failed %s: %s",
-                    player.game_name,
-                    match.match_id,
-                    exc,
-                )
+            copy_timeline_fields(match, stats)
+            db.add(match)
+            updated += 1
 
     if updated:
         db.commit()
@@ -162,13 +163,6 @@ async def re_enrich_missing_quest_stats(
     return updated
 
 
-def _role_filter_for_player(player: Player) -> str:
-    role = player.role.value if player.role else "ALL"
-    if role == "BOTTOM":
-        return "ADC"
-    return role
-
-
 async def sync_player_recent_matches(
     db: Session,
     player: Player,
@@ -176,12 +170,12 @@ async def sync_player_recent_matches(
     limit: int = 20,
 ) -> list[Match]:
     """Sync new ranked games from Riot and return stored matches."""
-    role_filter = _role_filter_for_player(player)
+    role_filter = role_filter_for_player(player.role.value if player.role else None)
     latest = get_latest_snapshot_for_player(db, player.id, user_id)
-    client = RiotAPIClient(region=player.region)
     new_matches: list[Match] = []
 
     try:
+        client = riot_client(player.region)
         async with create_secure_session() as session:
             if latest is None:
                 logger.info(
@@ -189,23 +183,24 @@ async def sync_player_recent_matches(
                     player.game_name,
                     limit,
                 )
-                new_matches = await client.fetch_matches(
-                    session=session,
-                    player=player,
+                participants = await client.fetch_participants(
+                    session,
+                    player_ref(player),
                     max_matches=limit,
                     role_filter=role_filter,
                     include_timeline=False,
                 )
             else:
                 known_ids = get_stored_match_ids_for_player(db, player.id, user_id)
-                new_matches = await client.fetch_matches_until_known(
+                participants = await client.fetch_participants_until_known(
                     session,
-                    player,
+                    player_ref(player),
                     known_ids,
                     role_filter,
                     include_timeline=True,
                     max_new=limit,
                 )
+        new_matches = [participant_to_match(p) for p in participants]
     except Exception as exc:
         logger.warning(
             "[%s] Riot sync failed (%s); using stored matches.",

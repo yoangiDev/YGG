@@ -2,7 +2,8 @@ from pydantic import BaseModel, computed_field, field_validator
 from typing import Any, Optional, List
 from datetime import datetime
 
-from app.service.role_quest_parser import resolve_role_bound_item
+from ygg_core.metrics import aggregates
+from ygg_core.timeline.quests import resolve_role_bound_item
 
 
 class MatchResponse(BaseModel):
@@ -155,86 +156,22 @@ class MatchResponse(BaseModel):
     @computed_field
     @property
     def deaths_by_phase(self) -> dict[str, int]:
-        early = 0
-        mid = 0
-        late = 0
-        for d in (self.death_events or []):
-            t = d.get("time", 0)
-            if t < 480:
-                early += 1
-            elif t < 840:
-                mid += 1
-            else:
-                late += 1
-        return {
-            "early_deaths": early,
-            "mid_deaths": mid,
-            "late_deaths": late
-        }
+        return aggregates.deaths_by_phase(self.death_events)
 
     @computed_field
     @property
     def death_events_normalized(self) -> list[dict[str, Any]]:
-        normalized = []
-        for d in (self.death_events or []):
-            x = d.get("x", 0)
-            y = d.get("y", 0)
-            nx = max(0.0, min(1.0, x / 15000))
-            ny = max(0.0, min(1.0, 1.0 - (y / 15000)))
-            normalized.append({
-                "x": x,
-                "y": y,
-                "norm_x": round(nx, 4),
-                "norm_y": round(ny, 4),
-                "time": d.get("time", 0),
-                "assistingParticipantIds": d.get("assistingParticipantIds", []),
-            })
-        return normalized
+        return aggregates.normalized_death_events(self.death_events)
 
     @computed_field
     @property
     def ward_events_normalized(self) -> list[dict[str, Any]]:
-        normalized = []
-        for w in (self.ward_events or []):
-            x = w.get("x", 0)
-            y = w.get("y", 0)
-            nx = max(0.0, min(1.0, x / 15000))
-            ny = max(0.0, min(1.0, 1.0 - (y / 15000)))
-            normalized.append({
-                "x": x,
-                "y": y,
-                "norm_x": round(nx, 4),
-                "norm_y": round(ny, 4),
-                "time": w.get("time", 0),
-                "type": w.get("type", "unknown"),
-            })
-        return normalized
+        return aggregates.normalized_ward_events(self.ward_events)
 
     @computed_field
     @property
     def dragon_setups_summary(self) -> dict[str, Any]:
-        setups = self.dragon_setups or []
-        team = [s for s in setups if s.get("team_dragon")]
-        if not team:
-            return {
-                "team_dragons": 0,
-                "setup_rate": None,
-                "presence_at_kill_rate": None,
-                "secure_rate": None,
-            }
-        n = len(team)
-        return {
-            "team_dragons": n,
-            "setup_rate": round(
-                sum(1 for s in team if s.get("in_prep_zone")) / n * 100, 1
-            ),
-            "presence_at_kill_rate": round(
-                sum(1 for s in team if s.get("at_kill_zone")) / n * 100, 1
-            ),
-            "secure_rate": round(
-                sum(1 for s in team if s.get("secured_by_jg")) / n * 100, 1
-            ),
-        }
+        return aggregates.dragon_setups_summary(self.dragon_setups)
 
 
 class SnapshotStatsResponse(BaseModel):

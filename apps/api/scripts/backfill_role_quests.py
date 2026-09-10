@@ -7,18 +7,15 @@ import logging
 import sys
 
 from sqlalchemy import select
+from ygg_core.timeline.quests import is_s26_match
 
-from app.db.base import Base  # noqa: F401
-from app.db.models.job import Job  # noqa: F401
+import app.db.models  # noqa: F401
 from app.db.models.match import Match
 from app.db.models.match_snapshot import MatchSnapshot
 from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
-from app.db.models.user import User  # noqa: F401
 from app.db.session import SessionLocal
-from app.service.http_client import create_secure_session
-from app.service.role_quest_parser import is_s26_match
-from app.service.riot_client import RiotAPIClient
+from app.service.riot import copy_timeline_fields, create_secure_session, riot_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -28,19 +25,17 @@ async def _backfill_rows(rows: list[tuple[Match, Player]]) -> int:
     updated = 0
     async with create_secure_session() as session:
         for match, player in rows:
-            client = RiotAPIClient(region=player.region)
-            timeline = await client._fetch_timeline(session, match.match_id)
-            match_data = await client._fetch_single_match(session, match.match_id)
-            if not timeline or not match_data:
-                logger.warning("Skipping %s — fetch failed", match.match_id)
-                continue
+            client = riot_client(player.region)
             try:
-                client._apply_timeline_to_match(
-                    match, match_data, timeline, player.puuid
-                )
-                updated += 1
+                stats = await client.fetch_participant(session, match.match_id, player.puuid)
             except Exception as exc:
                 logger.warning("Failed %s: %s", match.match_id, exc)
+                continue
+            if stats is None:
+                logger.warning("Skipping %s — fetch failed", match.match_id)
+                continue
+            copy_timeline_fields(match, stats)
+            updated += 1
     return updated
 
 

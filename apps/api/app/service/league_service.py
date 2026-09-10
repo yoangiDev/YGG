@@ -1,45 +1,19 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-import aiohttp
 from sqlalchemy.orm import Session
+from ygg_core.riot.routing import platform_from_region
 
 from app.db.models.rank_cutoff import RankCutoff
-from app.service.http_client import create_secure_session
-from app.service.riot_client import REGION_ROUTING, RiotAPIClient
+from app.service.riot import create_secure_session, riot_client
 
 logger = logging.getLogger(__name__)
 
-_QUEUE = "RANKED_SOLO_5x5"
 _CACHE_TTL = timedelta(hours=4)
 
 # Overall ladder: Challenger ranks 1-300, Grandmaster ranks 301-1000.
 CHALLENGER_CUTOFF_RANK = 300
 GRANDMASTER_CUTOFF_RANK = 1000
-
-
-def platform_from_region(region: str) -> str:
-    _, platform = REGION_ROUTING.get(region.lower(), ("europe", "euw1"))
-    return platform
-
-
-async def _fetch_league_entries(
-    session: aiohttp.ClientSession,
-    client: RiotAPIClient,
-    league_path: str,
-) -> list[dict]:
-    url = f"{client.base_platform}/lol/league/v4/{league_path}/by-queue/{_QUEUE}"
-    async with session.get(url, headers=client.headers) as response:
-        if response.status == 429:
-            retry_after = float(response.headers.get("Retry-After", 2))
-            logger.warning("Rate limit fetching %s. Retry in %ss", league_path, retry_after)
-            raise ConnectionError("Riot API rate limit exceeded.")
-        if response.status != 200:
-            logger.error("Riot API error (%s) for %s", response.status, league_path)
-            return []
-
-        payload = await response.json()
-        return payload.get("entries") or []
 
 
 def _cutoff_lp(entries: list[dict], rank_position: int) -> int | None:
@@ -65,16 +39,12 @@ def _cutoff_lp(entries: list[dict], rank_position: int) -> int | None:
 
 
 async def fetch_cutoffs_from_riot(region: str) -> tuple[int, int]:
-    platform = platform_from_region(region)
-    client = RiotAPIClient(platform)
+    # Pasa por el rate limiter global del core, como el resto de llamadas a Riot.
+    client = riot_client(platform_from_region(region))
 
     async with create_secure_session() as session:
-        challenger_entries = await _fetch_league_entries(
-            session, client, "challengerleagues"
-        )
-        grandmaster_entries = await _fetch_league_entries(
-            session, client, "grandmasterleagues"
-        )
+        challenger_entries = await client.fetch_league_entries(session, "challengerleagues")
+        grandmaster_entries = await client.fetch_league_entries(session, "grandmasterleagues")
 
     combined = challenger_entries + grandmaster_entries
     if not combined:

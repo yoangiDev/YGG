@@ -1,6 +1,10 @@
 COMPOSE = docker compose -f infra/docker-compose.yml
 
-.PHONY: up down logs ps migrate test-api lint
+.PHONY: up down logs ps migrate test-core test-api lint
+
+## Motor de análisis: sin base de datos
+test-core:
+	cd packages/ygg-core && pytest -q && mypy
 
 ## Levanta postgres + redis + api (aplica las migraciones al arrancar)
 up:

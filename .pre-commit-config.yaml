@@ -23,3 +23,5 @@ repos:
     hooks:
       - id: mypy
         files: ^packages/ygg-core/src/
+        args: ["--config-file", "packages/ygg-core/pyproject.toml"]
+        additional_dependencies: ["aiohttp>=3.10", "certifi"]

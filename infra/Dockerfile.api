@@ -11,6 +11,10 @@ WORKDIR /app
 
 RUN useradd --create-home --uid 10001 ygg
 
+# El motor de análisis va primero: cambia menos que la API y aprovecha la caché de capas.
+COPY packages/ygg-core/ /opt/ygg-core/
+RUN pip install /opt/ygg-core
+
 COPY apps/api/requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 

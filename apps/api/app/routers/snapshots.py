@@ -199,7 +199,7 @@ async def get_snapshot_dashboard(
     compare_tag_line: str | None = None,
     compare_region: str | None = None,
 ):
-    from app.service.dashboard_service import build_snapshot_dashboard
+    from app.service.dashboard import build_snapshot_dashboard
 
     snapshot = get_snapshot_by_id(db, snapshot_id, user_id=current_user.id)
     if not snapshot:

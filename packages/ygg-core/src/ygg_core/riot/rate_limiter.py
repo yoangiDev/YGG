@@ -1,4 +1,4 @@
-"""Global proactive rate limiter for Riot API requests (shared across all clients)."""
+"""Limitador global y proactivo para la Riot API, compartido por todos los clientes."""
 
 from __future__ import annotations
 
@@ -6,19 +6,20 @@ import asyncio
 import time
 from collections import deque
 
-# Riot dev key: 20 req/s, 100 req / 2 min. Stay well under (2 HTTP calls per match).
+# Clave de desarrollo: 20 req/s y 100 req / 2 min. Nos quedamos muy por debajo
+# (cada partida son 2 llamadas: match + timeline).
 _PER_SECOND = 10
 _PER_TWO_MINUTES = 70
 
 
 class RiotRateLimiter:
-    """Sliding-window limiter with global pause on 429 responses."""
+    """Ventana deslizante con pausa global coordinada al recibir un 429."""
 
     def __init__(
         self,
         per_second: int = _PER_SECOND,
         per_two_minutes: int = _PER_TWO_MINUTES,
-    ):
+    ) -> None:
         self.per_second = per_second
         self.per_two_minutes = per_two_minutes
         self._lock = asyncio.Lock()
@@ -43,7 +44,7 @@ class RiotRateLimiter:
         return max(wait, 0.05)
 
     async def pause(self, seconds: float) -> bool:
-        """Extend global pause. Returns True only when the window was extended."""
+        """Extiende la pausa global. Devuelve True solo si la ventana creció."""
         async with self._lock:
             new_until = time.monotonic() + seconds
             extended = new_until > self._paused_until + 0.05
@@ -77,7 +78,8 @@ def get_riot_rate_limiter() -> RiotRateLimiter:
         _limiter = RiotRateLimiter()
     return _limiter
 
+
 def reset_riot_rate_limiter() -> None:
-    """For tests only."""
+    """Solo para tests."""
     global _limiter
     _limiter = None

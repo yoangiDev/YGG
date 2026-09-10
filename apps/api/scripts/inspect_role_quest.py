@@ -5,27 +5,22 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.db.base import Base  # noqa: F401
-from app.db.models.job import Job  # noqa: F401
-from app.db.models.match import Match  # noqa: F401
-from app.db.models.match_snapshot import MatchSnapshot  # noqa: F401
-from app.db.models.player import Player  # noqa: F401
-from app.db.models.snapshot import Snapshot  # noqa: F401
-from app.db.models.user import User  # noqa: F401
-from app.db.session import SessionLocal
-from app.service.http_client import create_secure_session
-from app.service.role_quest_parser import (
-    QUEST_DESTROY_ITEMS,
+from ygg_core.domain.roles import normalize_role
+from ygg_core.timeline.quests import (
     ADC_ROLE_BOUND_ITEMS,
     DEFAULT_ROLE_BOUND_ITEMS,
+    QUEST_DESTROY_ITEMS,
     extract_quest_completion_time,
-    normalize_role,
 )
-from app.service.riot_client import RiotAPIClient
+
+import app.db.models  # noqa: F401
+from app.db.models.match import Match
+from app.db.session import SessionLocal
+from app.service.riot import create_secure_session, riot_client
 
 _IN_PROGRESS = set().union(*QUEST_DESTROY_ITEMS.values())
-_REWARD_BY_ROLE = {
-    **DEFAULT_ROLE_BOUND_ITEMS,
+_REWARD_BY_ROLE: dict[str, set[int]] = {
+    **{role: {item} for role, item in DEFAULT_ROLE_BOUND_ITEMS.items()},
     "JUNGLE": {1209, 1210, 1211},
     "TOP": {1220, 1221},
 }
@@ -38,10 +33,10 @@ def _sec_label(ms: int) -> str:
 
 
 async def inspect_match(match_id: str, region: str = "euw") -> None:
-    client = RiotAPIClient(region=region)
+    client = riot_client(region)
     async with create_secure_session() as session:
-        match = await client._fetch_single_match(session, match_id)
-        timeline = await client._fetch_timeline(session, match_id)
+        match = await client.fetch_match(session, match_id)
+        timeline = await client.fetch_timeline(session, match_id)
     if not match or not timeline:
         print("Failed to fetch match/timeline")
         return

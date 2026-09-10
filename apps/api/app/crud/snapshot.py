@@ -145,7 +145,7 @@ def persist_matches_to_snapshot(
     """Upsert match rows and link them to an existing snapshot."""
     from sqlalchemy.exc import IntegrityError
 
-    from app.service.riot_client import copy_timeline_fields
+    from app.service.riot import copy_timeline_fields
     from app.db.models.match_snapshot import MatchSnapshot
 
     for match in matches:

@@ -1,11 +1,12 @@
 import logging
-from sqlalchemy.orm import Session
+
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from ygg_core.riot.errors import RiotNotFoundError
 
 from app.db.models.player import Player
 from app.schemas.player import PlayerCreate, PlayerUpdate
-from app.service.http_client import create_secure_session
-from app.service.riot_client import RiotAPIClient
+from app.service.riot import apply_rank, apply_summoner, create_secure_session, riot_client
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +17,13 @@ async def create_player(db: Session, player_in: PlayerCreate, user_id: int) -> P
     Obtiene el PUUID, rango e icono antes de persistir.
     Devuelve None si el jugador no existe en Riot.
     """
-    client = RiotAPIClient(region=player_in.region.lower())
+    client = riot_client(player_in.region)
 
     async with create_secure_session() as session:
         # 1. Validar que el jugador existe en Riot y obtener PUUID
         try:
             puuid = await client.get_puuid(session, player_in.game_name, player_in.tag_line)
-        except ValueError as e:
+        except RiotNotFoundError as e:
             logger.warning(f"Player not found on Riot: {e}")
             return None
         except ConnectionError as e:
@@ -41,10 +42,15 @@ async def create_player(db: Session, player_in: PlayerCreate, user_id: int) -> P
             notes     = player_in.notes,
         )
 
-        # 3. Enriquecer con rango e icono — ValueError propaga si la región es incorrecta
+        # 3. Enriquecer con rango e icono. Un 404 del summoner significa región incorrecta.
         try:
-            await client.fetch_player_rank(session, player)
-            await client.fetch_summoner_info(session, player)
+            apply_rank(player, await client.fetch_rank(session, puuid))
+            apply_summoner(player, await client.fetch_summoner(session, puuid))
+        except RiotNotFoundError as e:
+            raise ValueError(
+                f"Player '{player_in.game_name}' does not exist in region '{player_in.region}'. "
+                "Please verify that the region is correct."
+            ) from e
         except ConnectionError as e:
             logger.error(f"Riot API connection error: {e}")
             raise
@@ -112,11 +118,14 @@ async def refresh_player_rank(db: Session, player: Player) -> Player:
     Refresca el rango e icono de un jugador consultando la Riot API.
     Se llama al arrancar la app o manualmente desde la UI.
     """
-    client = RiotAPIClient(region=player.region.lower())
+    client = riot_client(player.region)
 
     async with create_secure_session() as session:
-        await client.fetch_player_rank(session, player)
-        await client.fetch_summoner_info(session, player)
+        apply_rank(player, await client.fetch_rank(session, player.puuid))
+        try:
+            apply_summoner(player, await client.fetch_summoner(session, player.puuid))
+        except RiotNotFoundError:
+            logger.warning("Summoner %s not found in region %s", player.puuid, player.region)
 
     db.commit()
     db.refresh(player)
