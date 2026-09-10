@@ -9,7 +9,7 @@ import app.db.models  # noqa: F401  (registra todos los modelos ORM)
 from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.core.middleware import GlobalRateLimitMiddleware, RequestContextMiddleware
+from app.core.middleware import DemoModeMiddleware, GlobalRateLimitMiddleware, RequestContextMiddleware
 from app.core.observability import init_sentry
 from app.db.session import engine
 from app.routers.admin import router as admin_router
@@ -46,7 +46,9 @@ def create_app() -> FastAPI:
         generate_unique_id_function=_operation_id,
     )
 
-    # El último middleware añadido es el más externo: request-id → CORS → rate limit → rutas.
+    # El último middleware añadido es el más externo: request-id → CORS → rate limit → demo → rutas.
+    # La demo va dentro de CORS para que el navegador pueda leer su 403.
+    application.add_middleware(DemoModeMiddleware)
     application.add_middleware(GlobalRateLimitMiddleware)
     application.add_middleware(
         CORSMiddleware,

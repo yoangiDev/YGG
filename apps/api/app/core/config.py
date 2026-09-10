@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # Un job en "processing" sin heartbeat durante este tiempo se da por perdido.
     job_stale_after_seconds: int = 60
 
+    # ── Demo pública ───────────────────────────────────────────────────────────
+    # Solo lectura: rechaza escrituras y cualquier petición que llame a la Riot API.
+    # La demo sirve los datos sembrados con scripts/seed_demo.py.
+    demo_mode: bool = False
+
     # ── Observabilidad ─────────────────────────────────────────────────────────
     log_level: str = "INFO"
     # Sin definir: JSON fuera de desarrollo.

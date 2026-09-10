@@ -18,6 +18,8 @@ function mockApi(routes: Record<string, () => Response>) {
 }
 
 const noSession = () => new Response(null, { status: 401 });
+const tokens = () => jsonResponse({ access_token: "access", token_type: "bearer", expires_in: 900 });
+const me = (email: string) => () => jsonResponse({ id: 1, email, username: "demo", role: "user", is_active: true });
 
 beforeEach(() => {
   tokenStore.set(null);
@@ -27,6 +29,7 @@ beforeEach(() => {
 afterEach(() => {
   fetchMock.mockReset();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("LoginPage", () => {
@@ -70,11 +73,7 @@ describe("LoginPage", () => {
   });
 
   it("signs in and leaves the login page", async () => {
-    mockApi({
-      "/auth/refresh": noSession,
-      "/auth/login": () => jsonResponse({ access_token: "access", token_type: "bearer", expires_in: 900 }),
-      "/auth/me": () => jsonResponse({ id: 1, email: "demo@ygg.gg", username: "demo", role: "user", is_active: true }),
-    });
+    mockApi({ "/auth/refresh": noSession, "/auth/login": tokens, "/auth/me": me("demo@ygg.gg") });
     renderWithProviders(<LoginPage />, { path: "/login" });
 
     await userEvent.type(screen.getByLabelText("Email"), "demo@ygg.gg");
@@ -83,5 +82,30 @@ describe("LoginPage", () => {
 
     expect(await screen.findByText("Redirected")).toBeInTheDocument();
     expect(tokenStore.get()).toBe("access");
+  });
+
+  it("hides the demo access unless it is configured", async () => {
+    mockApi({ "/auth/refresh": noSession });
+    renderWithProviders(<LoginPage />);
+
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enter the demo" })).not.toBeInTheDocument();
+  });
+
+  it("enters the read-only demo with the published credentials", async () => {
+    vi.stubEnv("VITE_DEMO_EMAIL", "demo@ygg.gg");
+    vi.stubEnv("VITE_DEMO_PASSWORD", "public-demo-password");
+    mockApi({ "/auth/refresh": noSession, "/auth/login": tokens, "/auth/me": me("demo@ygg.gg") });
+    renderWithProviders(<LoginPage />, { path: "/login" });
+
+    expect(screen.getByText("public-demo-password")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Enter the demo" }));
+
+    expect(await screen.findByText("Redirected")).toBeInTheDocument();
+    const login = fetchMock.mock.calls.map(([input]) => input).find((input) => requestUrl(input).endsWith("/auth/login"));
+    expect(login instanceof Request ? await login.json() : null).toEqual({
+      email: "demo@ygg.gg",
+      password: "public-demo-password",
+    });
   });
 });

@@ -60,6 +60,46 @@ class RequestContextMiddleware:
             structlog.contextvars.clear_contextvars()
 
 
+DEMO_READ_ONLY = "The public demo is read-only."
+
+# Escrituras que sí se permiten en la demo: sin ellas no se puede entrar ni salir.
+_DEMO_ALLOWED_WRITES = frozenset({("POST", "/auth/login"), ("POST", "/auth/refresh"), ("POST", "/auth/logout")})
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# Parámetros de lectura que fuerzan llamadas a la Riot API (y gastan su cuota).
+_RIOT_QUERY_FLAGS = frozenset({"sync", "live", "refresh"})
+_RIOT_QUERY_PARAMS = frozenset({"compare_game_name", "compare_tag_line"})
+
+
+def demo_blocks(method: str, path: str, query_string: bytes) -> bool:
+    """True si la petición escribe en la base de datos o llama a Riot."""
+    if method not in _SAFE_METHODS:
+        return (method, path.rstrip("/") or "/") not in _DEMO_ALLOWED_WRITES
+    for pair in query_string.decode("latin-1").split("&"):
+        name, _, value = pair.partition("=")
+        if name in _RIOT_QUERY_PARAMS and value:
+            return True
+        if name in _RIOT_QUERY_FLAGS and value.lower() in ("1", "true", "yes", "on"):
+            return True
+    return False
+
+
+class DemoModeMiddleware:
+    """Con DEMO_MODE activo, la API es de solo lectura y nunca toca la Riot API."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] == "http"
+            and settings.demo_mode
+            and demo_blocks(scope["method"], scope["path"], scope.get("query_string", b""))
+        ):
+            await JSONResponse({"detail": DEMO_READ_ONLY}, status_code=403)(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
 class GlobalRateLimitMiddleware:
     """Límite global por IP para toda la API, salvo health checks y métricas."""
 

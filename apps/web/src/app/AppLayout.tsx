@@ -30,6 +30,12 @@ export function AppLayout() {
         Skip to content
       </a>
 
+      {import.meta.env.VITE_DEMO_EMAIL && user?.email === import.meta.env.VITE_DEMO_EMAIL && (
+        <p role="note" className="border-b border-stat-gold/30 bg-stat-gold/10 px-4 py-1.5 text-center text-xs text-stat-gold">
+          Read-only demo with seeded, anonymized games. Changes are disabled.
+        </p>
+      )}
+
       <header className="sticky top-0 z-30 border-b border-border/70 bg-bg/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Link to="/players" className="flex shrink-0 items-center gap-2 text-sm font-bold tracking-[0.25em] text-fg">

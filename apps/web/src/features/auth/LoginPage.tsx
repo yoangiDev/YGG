@@ -99,6 +99,49 @@ function RegisterForm() {
   );
 }
 
+/** Acceso a la demo pública (API con DEMO_MODE): credenciales visibles y entrada con un clic. */
+function DemoAccess() {
+  const { login } = useAuth();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const email = import.meta.env.VITE_DEMO_EMAIL;
+  const password = import.meta.env.VITE_DEMO_PASSWORD;
+
+  if (!email || !password) return null;
+
+  const enter = () => {
+    setPending(true);
+    setError(null);
+    login({ email, password }).catch((reason: unknown) => {
+      setError(errorMessage(reason, "The demo is not available right now."));
+      setPending(false);
+    });
+  };
+
+  return (
+    <section aria-labelledby="demo-title" className="mt-8 rounded-xl border border-primary/30 bg-primary/8 p-4">
+      <h3 id="demo-title" className="text-sm font-semibold text-fg">
+        Just looking around?
+      </h3>
+      <p className="mt-1 text-xs text-muted">The demo account is read-only and uses seeded, anonymized games.</p>
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-muted">Email</dt>
+        <dd className="font-mono text-fg">{email}</dd>
+        <dt className="text-muted">Password</dt>
+        <dd className="font-mono text-fg">{password}</dd>
+      </dl>
+      {error && (
+        <p role="alert" className="mt-3 text-xs text-stat-red">
+          {error}
+        </p>
+      )}
+      <Button variant="outline" className="mt-4 w-full" loading={pending} onClick={enter}>
+        Enter the demo
+      </Button>
+    </section>
+  );
+}
+
 export function LoginPage() {
   const { status } = useAuth();
   const location = useLocation();
@@ -171,6 +214,8 @@ export function LoginPage() {
               {mode === "login" ? "Create an account" : "Sign in instead"}
             </button>
           </p>
+
+          {mode === "login" && <DemoAccess />}
         </div>
       </main>
     </div>

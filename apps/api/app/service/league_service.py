@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from ygg_core.riot.routing import platform_from_region
 
+from app.core.config import settings
 from app.db.models.rank_cutoff import RankCutoff
 from app.service.riot import create_secure_session, riot_client
 
@@ -78,7 +79,8 @@ async def upsert_cutoffs(
 async def get_rank_cutoffs(db: AsyncSession, region: str, *, refresh: bool = False) -> RankCutoff:
     platform = platform_from_region(region)
     cached = await db.get(RankCutoff, platform)
-    if cached is not None and not refresh and not is_stale(cached):
+    # En la demo no hay clave de Riot: los cortes guardados valen aunque hayan caducado.
+    if cached is not None and not refresh and (settings.demo_mode or not is_stale(cached)):
         return cached
 
     gm_lp, ch_lp = await fetch_cutoffs_from_riot(region)

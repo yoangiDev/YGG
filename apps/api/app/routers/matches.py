@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
+from app.core.config import settings
 from app.crud.player import get_player_by_id
 from app.crud.snapshot import get_matches_page, get_snapshot_by_id, snapshot_summary
 from app.db.models.user import User
@@ -43,9 +44,10 @@ async def list_live_matches(
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
 
-    if not (live or sync) and is_history_fresh(player):
+    # En la demo el historial guardado es la única fuente: nunca se consulta a Riot.
+    if not (live or sync) and (settings.demo_mode or is_history_fresh(player)):
         cached = await get_history_from_cache(db, player_id, limit=limit)
-        if cached:
+        if cached or settings.demo_mode:
             return _to_responses(cached)
 
     try:
