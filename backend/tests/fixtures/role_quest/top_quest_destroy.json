@@ -1,0 +1,16 @@
+{
+  "info": {
+    "frames": [
+      {
+        "events": [
+          {
+            "type": "ITEM_DESTROYED",
+            "itemId": 1200,
+            "participantId": 1,
+            "timestamp": 684000
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "info": {
+    "frames": [
+      {
+        "events": [
+          {
+            "type": "ITEM_PURCHASED",
+            "itemId": 3020,
+            "participantId": 5,
+            "timestamp": 720000
+          }
+        ]
+      }
+    ]
+  }
+}

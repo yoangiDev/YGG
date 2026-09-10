@@ -1,0 +1,30 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.6          # Servidor ASGI para correr FastAPI
+python-multipart==0.0.12           # Necesario para UploadFile en FastAPI
+
+# ── Base de datos ──────────────────────────────────────────────────────────────
+sqlalchemy==2.0.35                 # ORM principal
+alembic==1.13.3                    # Migraciones de base de datos
+psycopg2-binary==2.9.11            # Driver PostgreSQL
+
+# ── Validación y schemas ───────────────────────────────────────────────────────
+pydantic==2.9.2                    # Modelos y validación (schemas/)
+pydantic-settings==2.5.2           # Leer variables de entorno (.env)
+pydantic[email]==2.9.2             # Validación de emails en schemas
+
+# ── Autenticación ──────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0   # Generación y validación de JWT
+bcrypt==4.0.1                      # Hashing de contraseñas
+
+# ── Riot API / HTTP ────────────────────────────────────────────────────────────
+aiohttp==3.10.5                    # Cliente HTTP asíncrono (riot_client.py)
+certifi==2024.8.30                 # Certificados SSL (http_client.py)
+
+# ── Variables de entorno ───────────────────────────────────────────────────────
+python-dotenv==1.0.1               # Cargar .env en local
+
+# ── Testing ─────────────────────────────────────────────────────────────────
+pytest==8.3.3                    # Tests unitarios
+pytest-asyncio==0.24.0           # Tests async
+httpx==0.27.2                    # Requerido por fastapi.testclient.TestClient

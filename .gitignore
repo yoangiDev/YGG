@@ -1,0 +1,27 @@
+# --- Entornos Virtuales (La carpeta con las librerías) ---
+env/
+venv/
+.venv/
+**/[Ee]nv/
+**/[Vv]env/
+
+# --- Variables de Entorno (Tus secretos y claves) ---
+.env
+**/.env
+
+# --- Archivos de Python innecesarios ---
+__pycache__/
+*.py[cod]
+
+# --- Archivos de caché cargados al ejecutar la app ---
+backend/data/
+
+# --- Logs y Bases de datos locales
+*.log
+*.sqlite
+
+# --- Flutter / Dart build artifacts
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies

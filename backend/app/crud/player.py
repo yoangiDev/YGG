@@ -1,0 +1,129 @@
+import logging
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
+from app.db.models.player import Player
+from app.schemas.player import PlayerCreate, PlayerUpdate
+from app.service.http_client import create_secure_session
+from app.service.riot_client import RiotAPIClient
+
+logger = logging.getLogger(__name__)
+
+
+async def create_player(db: Session, player_in: PlayerCreate, user_id: int) -> Player | None:
+    """
+    Crea un jugador validándolo primero contra la Riot API.
+    Obtiene el PUUID, rango e icono antes de persistir.
+    Devuelve None si el jugador no existe en Riot.
+    """
+    client = RiotAPIClient(region=player_in.region.lower())
+
+    async with create_secure_session() as session:
+        # 1. Validar que el jugador existe en Riot y obtener PUUID
+        try:
+            puuid = await client.get_puuid(session, player_in.game_name, player_in.tag_line)
+        except ValueError as e:
+            logger.warning(f"Player not found on Riot: {e}")
+            return None
+        except ConnectionError as e:
+            logger.error(f"Riot API connection error: {e}")
+            raise
+
+        # 2. Construir el objeto Player
+        player = Player(
+            user_id   = user_id,
+            puuid     = puuid,
+            game_name = player_in.game_name,
+            tag_line  = player_in.tag_line,
+            region    = player_in.region,
+            nickname  = player_in.nickname,
+            role      = player_in.role,
+            notes     = player_in.notes,
+        )
+
+        # 3. Enriquecer con rango e icono — ValueError propaga si la región es incorrecta
+        try:
+            await client.fetch_player_rank(session, player)
+            await client.fetch_summoner_info(session, player)
+        except ConnectionError as e:
+            logger.error(f"Riot API connection error: {e}")
+            raise
+
+    # 4. Persistir en la base de datos
+    db.add(player)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ValueError("duplicate")
+    db.refresh(player)
+    return player
+
+
+def get_player_by_id(db: Session, player_id: int, user_id: int) -> Player | None:
+    """Obtiene un jugador por ID verificando que pertenece al usuario autenticado."""
+    return (
+        db.query(Player)
+        .filter(Player.id == player_id, Player.user_id == user_id)
+        .first()
+    )
+
+
+def get_all_players(db: Session, user_id: int) -> list[Player]:
+    """Devuelve todos los jugadores del usuario autenticado."""
+    return (
+        db.query(Player)
+        .filter(Player.user_id == user_id)
+        .order_by(Player.nickname)
+        .all()
+    )
+
+
+def get_player_by_riot_id(
+    db: Session, game_name: str, tag_line: str, user_id: int
+) -> Player | None:
+    """Busca un jugador por su Riot ID dentro de los jugadores del usuario."""
+    return (
+        db.query(Player)
+        .filter(
+            Player.game_name == game_name,
+            Player.tag_line  == tag_line,
+            Player.user_id   == user_id,
+        )
+        .first()
+    )
+
+
+def update_player(db: Session, player: Player, player_in: PlayerUpdate) -> Player:
+    """Actualiza los campos editables de un jugador."""
+    player.game_name = player_in.game_name
+    player.tag_line  = player_in.tag_line
+    player.role      = player_in.role
+    player.nickname  = player_in.nickname
+    player.notes     = player_in.notes
+
+    db.commit()
+    db.refresh(player)
+    return player
+
+
+async def refresh_player_rank(db: Session, player: Player) -> Player:
+    """
+    Refresca el rango e icono de un jugador consultando la Riot API.
+    Se llama al arrancar la app o manualmente desde la UI.
+    """
+    client = RiotAPIClient(region=player.region.lower())
+
+    async with create_secure_session() as session:
+        await client.fetch_player_rank(session, player)
+        await client.fetch_summoner_info(session, player)
+
+    db.commit()
+    db.refresh(player)
+    return player
+
+
+def delete_player(db: Session, player: Player) -> None:
+    """Elimina un jugador y todos sus snapshots y partidas en cascada."""
+    db.delete(player)
+    db.commit()
