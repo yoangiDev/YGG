@@ -1,164 +1,128 @@
 # Arquitectura de YGG
 
-## Visión general
+YGG es un monorepo con tres piezas que se despliegan por separado y comparten un motor de anÃ¡lisis.
 
-YGG se organiza en dos capas principales:
-
-- **Frontend Flutter:** cliente multiplataforma que consume la API.
-- **Backend FastAPI:** servidor que procesa datos, orquesta análisis y persiste resultados.
-
-La comunicación entre ambas capas es por **HTTP/REST**. El backend también integra servicios externos como Riot API y Data Dragon, además de PostgreSQL como base de datos principal.
-
-## Diagrama de alto nivel
-
-```text
-Flutter App
-  +- Pantallas / Screens
-  +- Providers (Riverpod)
-  +- Cliente Dio
-        ¦
-        ?
-FastAPI Backend
-  +- Routers / Endpoints
-  +- Auth / JWT
-  +- Servicios Externos
-  ¦   +- Riot Client
-  ¦   +- Data Dragon
-  ¦   +- Stats Runner
-  +- CRUD / Repositorios
-  +- Sesiones SQLAlchemy
-        ¦
-        ?
-    PostgreSQL
+```
+packages/ygg-core   motor de anÃ¡lisis en Python puro (Riot API, timeline, mÃ©tricas, DuckDB, CLI)
+apps/api            API FastAPI + worker ARQ (usa ygg-core)
+apps/web            cliente React 19 + TypeScript (tipos generados desde el OpenAPI de la API)
+infra               Dockerfiles, docker compose, nginx y configuraciÃ³n de Fly.io
+docs                arquitectura, decisiones (adr/), mÃ©tricas y despliegue
 ```
 
-## Backend: capas y responsabilidades
+## VisiÃ³n general
 
-### 1. Rutas y entrada de datos
+```mermaid
+flowchart LR
+    subgraph Browser
+        web["React SPA<br/>TanStack Query Â· openapi-fetch"]
+    end
+    subgraph API["apps/api (FastAPI)"]
+        routes["Routers + auth<br/>rate limit Â· cachÃ©"]
+    end
+    worker["Worker ARQ<br/>(ygg-core)"]
+    pg[("PostgreSQL")]
+    redis[("Redis<br/>cola Â· pub/sub Â· cachÃ© Â· lÃ­mites")]
+    riot["Riot API<br/>Data Dragon"]
 
-`app/routers/` define los endpoints de la aplicación:
+    web -- "REST + Bearer" --> routes
+    web -- "SSE progreso" --> routes
+    routes --> pg
+    routes <--> redis
+    routes -- "encola anÃ¡lisis" --> redis
+    redis --> worker
+    worker --> pg
+    worker -- "progreso" --> redis
+    worker --> riot
+    routes -- "alta de jugador, rango" --> riot
+```
 
-- `auth/` — autenticación y registro.
-- `players/` — gestión de jugadores.
-- `matches/` — histórico de partidas.
-- `snapshots/` — creación y consulta de snapshots.
-- `ddragon/` — recursos de Data Dragon.
-- `admin/` — administración y estadísticas globales.
+## `packages/ygg-core`
 
-Estas rutas reciben peticiones, validan datos con **Pydantic** y llaman a la lógica de negocio correspondiente.
+Sin FastAPI ni SQLAlchemy; se prueba sin servicios (mypy estricto).
 
-### 2. Autenticación y autorización
+- `riot/`: cliente `aiohttp` con un **limitador global de ventana deslizante** (por segundo y por dos
+  minutos) compartido por todas las peticiones, pausa coordinada ante un 429 y parsers tolerantes a
+  campos ausentes.
+- `timeline/`: enriquecimiento con el timeline (diferencias de oro/CS/XP a los 8, 14 y 25 minutos,
+  muertes con coordenadas, visiÃ³n en objetivos, *Role Quests*).
+- `metrics/`: agregados, radar normalizado por rol, estados semÃ¡nticos (`excellent`/`good`/`normal`/`bad`)
+  y tendencias con media mÃ³vil.
+- `store/duckdb_store.py` y `cli.py`: almacÃ©n local y herramienta de lÃ­nea de comandos (ADR 0003).
 
-`app/auth/` se encarga de:
+## `apps/api`
 
-- la generación y verificación de JWT.
-- la validación de usuarios activos.
-- el control de acceso por roles.
+| Capa | DÃ³nde | Notas |
+|---|---|---|
+| Entrada | `main.py`, `app/core/middleware.py` | Middlewares ASGI puros: request id, CORS, lÃ­mite global, modo demo |
+| Rutas | `app/routers/` | `response_model` en todas; `openapi.json` versionado y comprobado en CI |
+| Auth | `app/auth/` | JWT de 15 min + refresh opaco rotado en cookie httpOnly (ADR 0006) |
+| Servicios | `app/service/` | Puente con ygg-core, dashboard y su cachÃ©, Data Dragon, cortes de rango |
+| Trabajos | `app/jobs/` | Cola ARQ, heartbeat, recuperaciÃ³n de huÃ©rfanos, progreso en Redis (ADR 0004 y 0005) |
+| Datos | `app/db/`, `app/crud/`, `app/queries/*.sql` | SQLAlchemy 2.0 async, upserts en lote y SQL a mano (ADR 0002) |
+| Esquema | `alembic/versions/` | Alembic es el Ãºnico dueÃ±o del esquema |
 
-El flujo de seguridad es:
+### Modelo de datos
 
-1. El usuario inicia sesión con email/contraseña.
-2. El backend valida el hash con `bcrypt`.
-3. Se emite un token JWT firmado.
-4. El cliente lo guarda y lo envía en `Authorization`.
-5. El backend valida el token y el rol en cada petición.
+```mermaid
+erDiagram
+    users ||--o{ players : sigue
+    users ||--o{ refresh_tokens : sesiones
+    players ||--o{ snapshots : analiza
+    players ||--o{ player_history_entries : historial
+    snapshots ||--o{ snapshot_participants : incluye
+    matches ||--o{ match_participants : "10 por partida"
+    match_participants ||--o{ snapshot_participants : ""
+    match_participants ||--o{ player_history_entries : ""
+    users ||--o{ jobs : lanza
+```
 
-### 3. Servicios externos
+Una fila de `match_participants` por jugador y partida, Ãºnica por `(match_id, puuid)` (ADR 0001).
 
-`app/service/` contiene la integración con APIs externas y la lógica de análisis:
+### Flujo de un anÃ¡lisis
 
-- `riot_client.py`: descarga de partidas, timelines, datos de liga y summoner.
-- `ddragon_client.py`: consulta y cache local de datos estáticos.
-- `http_client.py`: configuración de sesiones HTTP asíncronas.
-- `stats_runner.py`: orquestación de la creación de snapshots.
+1. `POST /snapshots/` valida el dueÃ±o del jugador y el lÃ­mite por usuario. Si ya hay un trabajo activo
+   con los mismos parÃ¡metros, devuelve ese (Ã­ndice Ãºnico parcial); si no, crea la fila en `jobs` y encola.
+2. El worker marca `processing`, lanza el heartbeat y llama a `run_stats_extraction`: lista las partidas del
+   perÃ­odo, reutiliza las ya guardadas **de ese jugador** y descarga el resto (partida + timeline) con el
+   limitador global.
+3. Cada avance se publica en Redis. `GET /snapshots/jobs/{id}/stream` lo reenvÃ­a por SSE a quien estÃ© mirando.
+4. Se hace upsert de partidas y participantes en lote, se crea el snapshot y se invalida la cachÃ© de los
+   dashboards afectados.
+5. Si el worker muere, el cron de recuperaciÃ³n marca el trabajo como interrumpido y el usuario puede reintentarlo.
 
-#### RiotAPIClient
+### CachÃ© y protecciÃ³n
 
-- controla la concurrencia para no exceder límites de Riot.
-- maneja reintentos en `429` respetando `Retry-After`.
-- normaliza campeones, runas, roles y regiones.
-- obtiene timelines para métricas avanzadas.
+- Dashboard por snapshot en Redis (`dashboard:v2:{id}`), invalidado al cambiar sus partidas o sus notas.
+- Datos de Data Dragon en Redis; las imÃ¡genes se piden directamente al CDN de Riot.
+- Rate limiting con ventana deslizante en Redis: global por IP, login por IP y por email, registro,
+  refresh y anÃ¡lisis por usuario. Si Redis cae, se degrada la protecciÃ³n antes que tumbar la API.
+- `DEMO_MODE`: API de solo lectura que nunca llama a Riot (ver [`deploy.md`](deploy.md)).
 
-#### Data Dragon
+### Observabilidad
 
-- almacena localmente los JSON de Riot.
-- permite mapear IDs de objetos, runas y hechizos.
-- reduce llamadas repetidas a Riot.
+Logs estructurados en JSON con `request_id` (structlog), mÃ©tricas Prometheus en `/metrics`, Sentry
+opcional, `/health/live` para el proceso y `/health` con Postgres y Redis (503 si alguno falla).
 
-### 4. Capa de datos
+## `apps/web`
 
-Los modelos SQLAlchemy están en `app/db/models/` y las migraciones se administran con Alembic.
+- **Rutas** (React Router, un *chunk* por pantalla): `/login`, `/players`, `/players/:id`,
+  `/players/:id/snapshots/:snapshotId`, `/players/:id/snapshots/compare?a=&b=`, `/cutoffs` y
+  `/admin/(stats|users|players)`. PestaÃ±a, filtro de campeÃ³n y comparaciÃ³n viven en la URL.
+- **Datos**: cliente `openapi-fetch` tipado con `src/lib/api/schema.d.ts`, generado desde
+  `apps/api/openapi.json` (CI falla si estÃ¡n desalineados). TanStack Query cachea e invalida por claves
+  jerÃ¡rquicas (`src/lib/queryKeys.ts`).
+- **SesiÃ³n**: access token en memoria, refresh silencioso ante un 401 con una Ãºnica peticiÃ³n compartida.
+- **GrÃ¡ficas**: radar y tendencias con Recharts; mapa de calor de muertes en SVG propio sobre el minimapa;
+  tabla de partidas con TanStack Table y virtualizaciÃ³n.
+- **Accesibilidad**: foco visible, *skip link*, `aria` en grÃ¡ficas con tabla alternativa,
+  `prefers-reduced-motion` y contraste AA en los tokens de color.
 
-Estructura principal:
+## Entornos
 
-- `user.py` — usuarios.
-- `player.py` — jugadores.
-- `snapshot.py` — snapshots.
-- `match.py` — datos de partidas.
-- `job.py` — estados de procesos.
-
-#### Relaciones clave
-
-- Un `User` puede tener muchos `Player`.
-- Un `Player` puede tener muchos `Snapshot`.
-- Un `Snapshot` puede estar vinculado a muchas `Match`.
-
-## Métricas y datos calculados
-
-YGG calcula métricas derivadas de la partida y del timeline para enriquecer cada match.
-
-- **Daño y combate:** KDA, participación de equipo, daño a estructuras.
-- **Diferenciales de línea:** CS, oro y experiencia en minutos clave.
-- **Métricas tácticas:** kills en solitario, wards, control de visión y objetivos.
-- **Eventos espaciales:** muertes y guardianes con coordenadas para mapas de calor.
-
-## Frontend: arquitectura por características
-
-La carpeta `frontend/lib/` está estructurada en:
-
-- `core/` — configuración global y utilidades.
-- `features/` — módulos independientes por dominio.
-- `screens/` — pantallas completas.
-
-Esto permite separar la lógica de negocio, los providers y los widgets según la funcionalidad.
-
-### Componentes principales
-
-- `core/api/`: cliente Dio e interceptores JWT.
-- `core/auth/`: estado de autenticación y sesión.
-- `core/theme/`: estilos y colores.
-- `features/admin/`: panel de administración.
-- `features/players/`: gestión de jugadores, matches y snapshots.
-
-## Flujo de creación de snapshots
-
-El proceso de snapshot está diseñado como job asíncrono para no bloquear la API:
-
-1. El frontend llama a `POST /snapshots/`.
-2. El backend crea un registro en `jobs` con `processing`.
-3. Se ejecuta `asyncio.create_task(...)` para procesar el snapshot en segundo plano.
-4. Se descargan partidas y timelines desde Riot.
-5. Se calculan métricas y se almacenan en PostgreSQL.
-6. El frontend consulta `GET /snapshots/jobs/{job_id}`.
-7. Cuando el job termina, el snapshot se muestra al usuario.
-
-## Seguridad y limitaciones
-
-### Seguridad
-
-- Contraseñas cifradas con `bcrypt`.
-- JWT firmado con `HS256`.
-- Control de acceso por roles y estado del usuario.
-
-### Limitaciones actuales
-
-- Los trabajos de snapshot se ejecutan en el proceso de FastAPI.
-- Si el servidor se reinicia, los jobs en curso pueden perderse.
-- No hay rate limiting global.
-
-### Mejoras recomendadas
-
-- Migrar a cola de tareas con **Redis + Celery/RQ**.
-- Sustituir polling por **WebSockets**.
-- Añadir caché distribuida para la Riot API.
-- Incorporar monitorización de rendimiento.
+| Entorno | CÃ³mo | Notas |
+|---|---|---|
+| Local completo | `make up` (docker compose) | Postgres, Redis, API, worker y web en `localhost:5173` |
+| Local sin Docker | `uvicorn` con `REDIS_URL=memory://` + `npm run dev` | El trabajo corre en el propio proceso (`InlineJobQueue`) |
+| CI | GitHub Actions | ruff, mypy, pytest (core y API con servicios), lint, tests, build, presupuesto y e2e de la web |
+| ProducciÃ³n | Vercel + Fly.io + Supabase + Upstash | Ver [`deploy.md`](deploy.md) |

@@ -43,7 +43,17 @@ test.describe("public demo", () => {
   test.skip(!process.env.E2E_DEMO_PASSWORD, "Set E2E_DEMO_PASSWORD (and E2E_DEMO_EMAIL) for a seeded demo API");
 
   test("browses the seeded analysis and cannot change anything", async ({ page }) => {
+    // Capturas de tamaño de pantalla (las del README salen de aquí).
     const shots = "test-results/screenshots";
+    const settle = async () => {
+      await page.waitForLoadState("networkidle");
+      // Iconos de campeón con loading="lazy": se espera a que terminen (o fallen) antes de capturar.
+      await page.evaluate(
+        "Promise.all([document.fonts.ready, ...Array.from(document.images).filter((i) => !i.complete).map((i) => new Promise((r) => { i.addEventListener('load', r); i.addEventListener('error', r); }))])",
+      );
+    };
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
     await page.goto("/login");
     await page.getByLabel("Email").fill(process.env.E2E_DEMO_EMAIL ?? "demo@ygg.gg");
     await page.getByLabel("Password").fill(process.env.E2E_DEMO_PASSWORD ?? "");
@@ -51,21 +61,31 @@ test.describe("public demo", () => {
 
     const mid = page.getByRole("link", { name: "Demo Mid#DEMO" });
     await expect(mid).toBeVisible();
+    await settle();
     await page.screenshot({ path: `${shots}/real-01-players.png` });
 
     await mid.click();
     await expect(page.getByText("Last 30 days")).toBeVisible();
+    await settle();
+    await page.screenshot({ path: `${shots}/real-02-player.png` });
+
+    // Cualquier escritura se rechaza con un mensaje legible.
     await page.getByRole("button", { name: "Update rank" }).click();
-    await expect(page.getByText("The public demo is read-only.")).toBeVisible();
-    await page.screenshot({ path: `${shots}/real-02-player.png`, fullPage: true });
+    const readOnly = page.getByText("The public demo is read-only.");
+    await expect(readOnly).toBeVisible();
+    await expect(readOnly).toBeHidden({ timeout: 10_000 });
 
-    await page.getByRole("link", { name: /Last 30 days/ }).click();
+    const snapshotLink = page.getByRole("link", { name: /Last 30 days/ });
+    const href = await snapshotLink.getAttribute("href");
+    await snapshotLink.click();
     await expect(page.getByRole("img", { name: /Radar chart/ })).toBeVisible();
-    await page.waitForLoadState("networkidle");
-    await page.screenshot({ path: `${shots}/real-03-dashboard.png`, fullPage: true });
+    await settle();
+    await page.screenshot({ path: `${shots}/real-03-dashboard.png` });
+    await page.screenshot({ path: `${shots}/real-03-dashboard-full.png`, fullPage: true });
 
-    await page.getByRole("tab", { name: /Matches/ }).click();
+    await page.goto(`${href ?? ""}?tab=matches`);
     await expect(page.getByRole("region", { name: "Matches table" }).getByRole("row")).not.toHaveCount(0);
+    await settle();
     await page.screenshot({ path: `${shots}/real-04-matches.png` });
   });
 });
