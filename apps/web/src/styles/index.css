@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Paleta Hextech: los valores HSL del prototipo original, ahora como tokens de Tailwind. */
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: hsl(252 28% 8%);
+  --color-surface: hsl(252 25% 11%);
+  --color-surface-2: hsl(252 25% 14%);
+  --color-primary: hsl(270 70% 62%);
+  --color-primary-light: hsl(270 80% 78%);
+  --color-primary-dim: hsl(270 50% 42%);
+  --color-border: hsl(270 30% 19%);
+  /* Más claro que el original (#6b6578) para cumplir contraste AA sobre el fondo. */
+  --color-muted: #a39cb3;
+  --color-fg: #e8e0f5;
+
+  /* Estado semántico de las métricas (docs/FRONTEND_COLOR_GUIDE.md) */
+  --color-stat-gold: #ff9f19;
+  --color-stat-blue: #38bdf8;
+  --color-stat-green: #4ade80;
+  --color-stat-gray: #94a3b8;
+  --color-stat-red: #f87171;
+
+  --color-rank-iron: #8a8a9a;
+  --color-rank-bronze: #c0693a;
+  --color-rank-silver: #7a8fa8;
+  --color-rank-gold: #c8960f;
+  --color-rank-platinum: #00b09e;
+  --color-rank-emerald: #2ecc6e;
+  --color-rank-diamond: #5090f0;
+  --color-rank-master: #a050d0;
+  --color-rank-grandmaster: #e04030;
+  --color-rank-challenger: #f0d020;
+
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-bg);
+    background-image: radial-gradient(60rem 40rem at 85% -10%, hsl(270 70% 62% / 0.07), transparent 70%);
+    background-attachment: fixed;
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary-light);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: hsl(270 70% 62% / 0.35);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -102,3 +102,36 @@ jobs:
       - run: pip install -e ../../packages/ygg-core -r requirements.txt
       - run: alembic upgrade head
       - run: pytest -q
+
+  web:
+    name: Web (lint, types, tests, build, e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      # El cliente se genera desde apps/api/openapi.json: si la API cambia y nadie regenera, falla aquí.
+      - name: API types match openapi.json
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.d.ts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Initial JS budget (< 200 KB gzip)
+        run: node scripts/bundle-budget.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

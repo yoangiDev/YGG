@@ -71,5 +71,18 @@ services:
       redis:
         condition: service_healthy
 
+  # Cliente React en http://localhost:5173 (el origen que admite CORS_ORIGINS por defecto).
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:
