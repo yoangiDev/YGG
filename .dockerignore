@@ -8,6 +8,7 @@
 **/.env
 **/node_modules
 **/dist
-apps/flutter
+apps/web/test-results
+apps/web/playwright-report
 apps/api/data
 .pgdata

@@ -6,7 +6,7 @@ export interface HeatPoint {
 
 /**
  * Densidad de puntos sobre una rejilla con núcleo gaussiano, normalizada a [0, 1].
- * Misma fórmula que el mapa de calor del cliente Flutter.
+ * Misma fórmula que el mapa de calor del cliente Flutter original (etiqueta v1.0-tfg).
  */
 export function buildHeatmapGrid(points: readonly HeatPoint[], gridSize = 40, kernelRadius = 0.06): number[] {
   const grid = new Array<number>(gridSize * gridSize).fill(0);

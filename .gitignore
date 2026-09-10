@@ -38,9 +38,3 @@ dist/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/.vite/
-
-# --- Flutter / Dart build artifacts
-apps/flutter/build/
-apps/flutter/.dart_tool/
-apps/flutter/.flutter-plugins
-apps/flutter/.flutter-plugins-dependencies

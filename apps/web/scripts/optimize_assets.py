@@ -5,9 +5,13 @@ P11). Aquí se redimensionan al tamaño máximo al que se muestran (x2 para
 pantallas retina) y se codifican en WebP. DM Sans pasa de TTF a WOFF2 con solo
 los glifos latinos.
 
+El cliente Flutter ya no está en main; los originales se recuperan de la
+etiqueta v1.0-tfg sin tocar el índice de git:
+
+    git archive v1.0-tfg apps/flutter/assets | tar -x
     python apps/web/scripts/optimize_assets.py
 
-Requiere Pillow, fontTools y brotli.
+Requiere Pillow, fontTools y brotli. El resultado (apps/web/public) sí está versionado.
 """
 
 from pathlib import Path
