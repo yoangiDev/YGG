@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from app.core.config import Settings, settings
+from app.core.config import Settings, settings, to_async_database_url
 from app.db.models.rank_cutoff import RankCutoff
 from app.service.league_service import is_stale
 from main import app
@@ -32,6 +34,23 @@ class TestCors:
             database_url="postgresql://x", secret_key="x", cors_origins=" https://a.dev, ,https://b.dev "
         )
         assert parsed.cors_origin_list == ["https://a.dev", "https://b.dev"]
+
+
+class TestDatabaseUrl:
+    def test_async_url_uses_asyncpg_and_translates_sslmode(self):
+        assert to_async_database_url("postgresql://u:p@db.example:5432/ygg?sslmode=require") == (
+            "postgresql+asyncpg://u:p@db.example:5432/ygg?ssl=require"
+        )
+
+    def test_production_requires_a_strong_secret(self):
+        with pytest.raises(ValidationError, match="at least 32 bytes"):
+            Settings(database_url="postgresql://x", secret_key="corta", environment="production")
+
+    def test_secure_cookies_default_to_production_only(self):
+        base = {"database_url": "postgresql://x", "secret_key": "k" * 32}
+        assert Settings(**base, environment="production").secure_cookies is True
+        assert Settings(**base, environment="development").secure_cookies is False
+        assert Settings(**base, environment="development", cookie_secure=True).secure_cookies is True
 
 
 class TestRankCutoffStaleness:

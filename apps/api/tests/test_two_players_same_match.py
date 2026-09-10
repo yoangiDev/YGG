@@ -42,10 +42,10 @@ async def _analyse(db, fake, *players) -> list[int]:
         return [await run_stats_extraction(db, player, 1_748_000_000, 1_749_000_000) for player in players]
 
 
-async def test_each_player_sees_their_own_stats_in_a_shared_match(db_session):
+async def test_each_player_sees_their_own_stats_in_a_shared_match(db):
     match_id = unique("EUW1")
-    top = create_player(db_session, role=RoleEnum.TOP)
-    jungle = create_player(db_session, role=RoleEnum.JUNGLE)
+    top = await create_player(db, role=RoleEnum.TOP)
+    jungle = await create_player(db, role=RoleEnum.JUNGLE)
     fake = FakeRiotClient(
         match_id,
         {
@@ -54,36 +54,40 @@ async def test_each_player_sees_their_own_stats_in_a_shared_match(db_session):
         },
     )
 
-    top_snapshot, jungle_snapshot = await _analyse(db_session, fake, top, jungle)
+    top_snapshot, jungle_snapshot = await _analyse(db, fake, top, jungle)
 
     # El segundo análisis no recibe como caché la fila del primer jugador.
     assert fake.known_by_puuid[jungle.puuid] == {}
 
-    [top_row] = get_matches_by_snapshot(db_session, top_snapshot, top.user_id)
-    [jungle_row] = get_matches_by_snapshot(db_session, jungle_snapshot, jungle.user_id)
+    [top_row] = await get_matches_by_snapshot(db, top_snapshot, top.user_id)
+    [jungle_row] = await get_matches_by_snapshot(db, jungle_snapshot, jungle.user_id)
     assert (top_row.champion, top_row.kills, top_row.gold_diff_14) == ("Gnar", 3, -350)
     assert (jungle_row.champion, jungle_row.kills, jungle_row.gold_diff_14) == ("LeeSin", 8, 420)
     assert top_row.match_id == jungle_row.match_id
-    assert db_session.scalar(
-        select(func.count()).select_from(MatchParticipant).where(MatchParticipant.match_id == match_id)
-    ) == 2
+    count = select(func.count()).select_from(MatchParticipant).where(MatchParticipant.match_id == match_id)
+    assert await db.scalar(count) == 2
 
     ddragon = MagicMock(version="16.10.1")
     ddragon.champion_icon_url.side_effect = lambda version, champion: f"{champion}.png"
     with patch("app.service.dashboard.get_ddragon_client", AsyncMock(return_value=ddragon)):
-        top_dashboard = await build_snapshot_dashboard(db_session, db_session.get(Snapshot, top_snapshot))
-        jungle_dashboard = await build_snapshot_dashboard(db_session, db_session.get(Snapshot, jungle_snapshot))
+        top_dashboard = await build_snapshot_dashboard(db, await db.get(Snapshot, top_snapshot, populate_existing=True))
+        jungle_dashboard = await build_snapshot_dashboard(
+            db, await db.get(Snapshot, jungle_snapshot, populate_existing=True)
+        )
 
     assert (top_dashboard.active_role, [c.champion_name for c in top_dashboard.played_champions]) == ("TOP", ["Gnar"])
-    assert (jungle_dashboard.active_role, [c.champion_name for c in jungle_dashboard.played_champions]) == ("JUNGLE", ["LeeSin"])
+    assert (jungle_dashboard.active_role, [c.champion_name for c in jungle_dashboard.played_champions]) == (
+        "JUNGLE",
+        ["LeeSin"],
+    )
 
 
-async def test_a_player_reuses_their_own_cached_row(db_session):
+async def test_a_player_reuses_their_own_cached_row(db):
     match_id = unique("EUW1")
-    player = create_player(db_session, role=RoleEnum.MID)
+    player = await create_player(db, role=RoleEnum.MID)
     fake = FakeRiotClient(match_id, {player.puuid: make_stats(match_id, player.puuid)})
 
-    await _analyse(db_session, fake, player)
-    await _analyse(db_session, fake, player)
+    await _analyse(db, fake, player)
+    await _analyse(db, fake, player)
 
     assert set(fake.known_by_puuid[player.puuid]) == {match_id}

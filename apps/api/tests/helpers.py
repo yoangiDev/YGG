@@ -3,10 +3,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from ygg_core.domain.participant import ParticipantStats
 
 from app.db.models.player import Player, RoleEnum
+from app.db.models.snapshot import Snapshot
 from app.db.models.user import User
 
 
@@ -37,18 +38,18 @@ def make_stats(match_id: str, puuid: str, **overrides) -> ParticipantStats:
     return ParticipantStats(**values)
 
 
-def create_user(db: Session) -> User:
+async def create_user(db: AsyncSession) -> User:
     user = User(email=f"{unique('u')}@example.com", username=unique("user"), hashed_password="x")
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
-def create_player(
-    db: Session, *, user: User | None = None, puuid: str | None = None, role: RoleEnum = RoleEnum.MID
+async def create_player(
+    db: AsyncSession, *, user: User | None = None, puuid: str | None = None, role: RoleEnum = RoleEnum.MID
 ) -> Player:
-    owner = user or create_user(db)
+    owner = user or await create_user(db)
     player = Player(
         user_id=owner.id,
         puuid=puuid or unique("puuid"),
@@ -58,6 +59,19 @@ def create_player(
         role=role,
     )
     db.add(player)
-    db.commit()
-    db.refresh(player)
+    await db.commit()
+    await db.refresh(player)
     return player
+
+
+async def create_snapshot(db: AsyncSession, player: Player) -> Snapshot:
+    snapshot = Snapshot(
+        player_id=player.id,
+        date_from=datetime(2025, 5, 1, tzinfo=timezone.utc),
+        date_to=datetime(2025, 7, 1, tzinfo=timezone.utc),
+    )
+    db.add(snapshot)
+    await db.commit()
+    # populate_existing: carga también el jugador (relación joined), que con AsyncSession
+    # no se puede cargar de forma perezosa después.
+    return await db.get(Snapshot, snapshot.id, populate_existing=True)

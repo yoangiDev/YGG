@@ -11,6 +11,7 @@ from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
 from app.db.models.player_history import PlayerHistoryEntry
 from app.db.models.rank_cutoff import RankCutoff
+from app.db.models.refresh_token import RefreshToken
 from app.db.models.snapshot import Snapshot
 from app.db.models.snapshot_participant import SnapshotParticipant
 from app.db.models.user import User
@@ -23,6 +24,7 @@ __all__ = [
     "Player",
     "PlayerHistoryEntry",
     "RankCutoff",
+    "RefreshToken",
     "Snapshot",
     "SnapshotParticipant",
     "User",

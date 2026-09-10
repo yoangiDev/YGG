@@ -1,34 +1,41 @@
-from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
+"""Access tokens JWT (PyJWT). Vida corta: la sesión la mantiene el refresh token."""
 
-from app.db.session import settings
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import jwt
+
+from app.core.config import settings
+
+ACCESS_TOKEN_TYPE = "access"
 
 
-def create_access_token(user_id: int) -> str:
-    """
-    Genera un token JWT firmado con el SECRET_KEY del .env.
-    El token expira según ACCESS_TOKEN_EXPIRE_MINUTES.
-    """
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
+def create_access_token(user_id: int, *, now: datetime | None = None) -> str:
+    issued_at = now or datetime.now(UTC)
     payload = {
-        "sub": str(user_id),   # subject — identificador del usuario
-        "exp": expire,
+        "sub": str(user_id),
+        "type": ACCESS_TOKEN_TYPE,
+        "iat": issued_at,
+        "exp": issued_at + timedelta(minutes=settings.access_token_expire_minutes),
+        "jti": uuid.uuid4().hex,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
 def decode_access_token(token: str) -> int | None:
-    """
-    Valida y decodifica un token JWT.
-    Devuelve el user_id si el token es válido, None si no lo es.
-    """
+    """user_id si el token es un access token válido y vigente; None en cualquier otro caso."""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id = payload.get("sub")
-        if user_id is None:
-            return None
-        return int(user_id)
-    except JWTError:
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            options={"require": ["exp", "iat", "sub", "type"]},
+        )
+    except jwt.PyJWTError:
+        return None
+    if payload.get("type") != ACCESS_TOKEN_TYPE:
+        return None
+    try:
+        return int(payload["sub"])
+    except (TypeError, ValueError):
         return None

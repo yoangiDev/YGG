@@ -45,14 +45,10 @@ async def inspect_match(match_id: str, region: str = "euw") -> None:
     info = match["info"]
     print("gameVersion", info.get("gameVersion"))
 
-    for pid, p in sorted(
-        (x["participantId"], x) for x in info["participants"]
-    ):
+    for pid, p in sorted((x["participantId"], x) for x in info["participants"]):
         role = normalize_role(p.get("teamPosition", ""))
         rb = p.get("roleBoundItem") or 0
-        parsed = extract_quest_completion_time(
-            timeline, pid, role, role_bound_item=rb or None
-        )
+        parsed = extract_quest_completion_time(timeline, pid, role, role_bound_item=rb or None)
         print(f"\nP{pid} {role} roleBound={rb} parser={parsed}s")
 
         reward_ids = set(_REWARD_BY_ROLE.get(role, set()))
@@ -74,14 +70,16 @@ async def inspect_match(match_id: str, region: str = "euw") -> None:
                     print(f"  purchase reward {iid} @ {_sec_label(ts)}")
 
 
+async def _latest_match_id() -> str | None:
+    async with SessionLocal() as db:
+        return await db.scalar(select(Match.match_id).order_by(Match.creation_time.desc()).limit(1))
+
+
 def main() -> None:
     match_id = sys.argv[1] if len(sys.argv) > 1 else None
     region = sys.argv[2] if len(sys.argv) > 2 else "euw"
     if not match_id:
-        db = SessionLocal()
-        row = db.scalars(select(Match).order_by(Match.creation_time.desc()).limit(1)).first()
-        db.close()
-        match_id = row.match_id if row else "EUW1_7867262819"
+        match_id = asyncio.run(_latest_match_id()) or "EUW1_7867262819"
     asyncio.run(inspect_match(match_id, region))
 
 

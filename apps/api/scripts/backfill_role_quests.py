@@ -15,6 +15,7 @@ from app.db.models.player import Player
 from app.db.models.snapshot import Snapshot
 from app.db.models.snapshot_participant import SnapshotParticipant
 from app.db.session import SessionLocal
+from app.service.dashboard_cache import invalidate_dashboards_for_participants
 from app.service.riot import copy_timeline_fields, create_secure_session, riot_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -39,9 +40,8 @@ async def _backfill_rows(rows: list[tuple[MatchParticipant, Player]]) -> int:
     return updated
 
 
-def backfill(limit: int = 50, *, force: bool = False) -> None:
-    db = SessionLocal()
-    try:
+async def backfill(limit: int = 50, *, force: bool = False) -> None:
+    async with SessionLocal() as db:
         query = (
             select(MatchParticipant, Player)
             .join(SnapshotParticipant, SnapshotParticipant.match_participant_id == MatchParticipant.id)
@@ -54,7 +54,7 @@ def backfill(limit: int = 50, *, force: bool = False) -> None:
 
         rows: list[tuple[MatchParticipant, Player]] = []
         seen: set[int] = set()
-        for participant, player in db.execute(query):
+        for participant, player in (await db.execute(query)).all():
             if participant.id in seen or not is_s26_match(participant.creation_time):
                 continue
             seen.add(participant.id)
@@ -67,15 +67,14 @@ def backfill(limit: int = 50, *, force: bool = False) -> None:
             return
 
         logger.info("Backfilling quest data for %d matches...", len(rows))
-        updated = asyncio.run(_backfill_rows(rows))
-        db.commit()
+        updated = await _backfill_rows(rows)
+        await db.commit()
+        await invalidate_dashboards_for_participants(db, (participant.id for participant, _ in rows))
         logger.info("Updated quest data for %d/%d matches.", updated, len(rows))
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
     force = "--force" in sys.argv
     args = [a for a in sys.argv[1:] if a != "--force"]
     n = int(args[0]) if args else 50
-    backfill(n, force=force)
+    asyncio.run(backfill(n, force=force))

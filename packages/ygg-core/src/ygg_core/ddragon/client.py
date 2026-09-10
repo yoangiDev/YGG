@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
@@ -21,24 +22,26 @@ DATA_FILES: tuple[str, ...] = ("item.json", "runesReforged.json", "summoner.json
 
 
 class DDragonStore(Protocol):
-    def load(self, version: str, filename: str) -> Any | None: ...
+    """Dónde se guardan los JSON por versión. Asíncrono para poder respaldarlo en Redis."""
 
-    def save(self, version: str, filename: str, data: Any) -> None: ...
+    async def load(self, version: str, filename: str) -> Any | None: ...
+
+    async def save(self, version: str, filename: str, data: Any) -> None: ...
 
 
 class MemoryDDragonStore:
     def __init__(self) -> None:
         self._data: dict[tuple[str, str], Any] = {}
 
-    def load(self, version: str, filename: str) -> Any | None:
+    async def load(self, version: str, filename: str) -> Any | None:
         return self._data.get((version, filename))
 
-    def save(self, version: str, filename: str, data: Any) -> None:
+    async def save(self, version: str, filename: str, data: Any) -> None:
         self._data[(version, filename)] = data
 
 
 class FileDDragonStore:
-    """JSON por versión en disco (y la imagen del minimapa)."""
+    """JSON por versión en disco. Útil para la CLI; en un contenedor el disco es efímero."""
 
     def __init__(self, data_dir: str | Path) -> None:
         self.data_dir = Path(data_dir)
@@ -47,8 +50,7 @@ class FileDDragonStore:
     def _path(self, version: str, filename: str) -> Path:
         return self.data_dir / f"{version}_{filename}"
 
-    def load(self, version: str, filename: str) -> Any | None:
-        path = self._path(version, filename)
+    def _read(self, path: Path) -> Any | None:
         if not path.exists():
             return None
         try:
@@ -57,18 +59,17 @@ class FileDDragonStore:
             logger.error("DDragon store: error loading %s: %s", path.name, exc)
             return None
 
-    def save(self, version: str, filename: str, data: Any) -> None:
-        path = self._path(version, filename)
+    def _write(self, path: Path, data: Any) -> None:
         try:
             path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         except OSError as exc:
             logger.error("DDragon store: error saving %s: %s", path.name, exc)
 
-    def map_path(self, version: str) -> Path:
-        return self.data_dir / f"{version}_map11.png"
+    async def load(self, version: str, filename: str) -> Any | None:
+        return await asyncio.to_thread(self._read, self._path(version, filename))
 
-    def save_map(self, version: str, data: bytes) -> None:
-        self.map_path(version).write_bytes(data)
+    async def save(self, version: str, filename: str, data: Any) -> None:
+        await asyncio.to_thread(self._write, self._path(version, filename), data)
 
 
 class DDragonClient:
@@ -90,7 +91,7 @@ class DDragonClient:
     async def initialize(self) -> None:
         """Carga la última versión: del almacén si está completa, de Data Dragon si no."""
         version = await self.fetch_latest_version()
-        if self._load_all(version):
+        if await self._load_all(version):
             logger.info("DDragon %s loaded from store.", version)
         else:
             await self._download_all(version)
@@ -108,8 +109,8 @@ class DDragonClient:
             logger.warning("Could not fetch DDragon version: %s. Using %s.", exc, FALLBACK_VERSION)
             return FALLBACK_VERSION
 
-    def _load_all(self, version: str) -> bool:
-        loaded = {name: self.store.load(version, name) for name in DATA_FILES}
+    async def _load_all(self, version: str) -> bool:
+        loaded = {name: await self.store.load(version, name) for name in DATA_FILES}
         if any(content is None for content in loaded.values()):
             return False
         for name, content in loaded.items():
@@ -125,7 +126,7 @@ class DDragonClient:
                         logger.error("Error downloading %s: HTTP %s", name, response.status)
                         continue
                     content = await response.json()
-                self.store.save(version, name, content)
+                await self.store.save(version, name, content)
                 self._apply(name, content)
 
     def _apply(self, filename: str, content: Any) -> None:

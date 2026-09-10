@@ -1,12 +1,12 @@
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class SnapshotCreate(BaseModel):
     """Lo que recibe la API al lanzar un análisis."""
     player_id: int
-    date_from: int      # Unix timestamp — más fácil de manejar desde Flutter
+    date_from: int      # Unix timestamp (segundos)
     date_to: int
     description: str = ""
 
@@ -23,8 +23,8 @@ class SnapshotResponse(BaseModel):
     player_id: int
     date_from: datetime
     date_to: datetime
-    description: str = ""
-    notes: str = ""
+    description: str | None = ""
+    notes: str | None = ""
     match_count: int = 0
 
     model_config = {"from_attributes": True}
@@ -55,6 +55,6 @@ class SnapshotJobStatus(BaseModel):
     """Estado de un job en curso."""
     job_id: str
     status: str             # "processing" | "done" | "error"
-    progress: int = 0       # 0-100 — útil para mostrar barra de progreso en Flutter
-    snapshot_id: Optional[int] = None
-    error: Optional[str] = None
+    progress: int = 0       # 0-100
+    snapshot_id: int | None = None
+    error: str | None = None

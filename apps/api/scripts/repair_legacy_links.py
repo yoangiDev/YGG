@@ -21,6 +21,7 @@ from app.crud.participants import add_history_entries, link_snapshot, upsert_par
 from app.db.models.legacy_link import LegacyUnresolvedLink
 from app.db.models.player import Player
 from app.db.session import SessionLocal
+from app.service.dashboard_cache import invalidate_dashboards
 from app.service.riot import create_secure_session, riot_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -28,10 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 async def repair(limit: int) -> tuple[int, int]:
-    db = SessionLocal()
-    try:
+    async with SessionLocal() as db:
         links = list(
-            db.scalars(
+            await db.scalars(
                 select(LegacyUnresolvedLink)
                 .where(LegacyUnresolvedLink.resolved_at.is_(None))
                 .order_by(LegacyUnresolvedLink.id)
@@ -41,27 +41,25 @@ async def repair(limit: int) -> tuple[int, int]:
         repaired = 0
         async with create_secure_session() as session:
             for link in links:
-                player = db.get(Player, link.player_id)
+                player = await db.get(Player, link.player_id)
                 if player is None:
                     continue
-                stats = await riot_client(player.region).fetch_participant(
-                    session, link.match_id, player.puuid
-                )
+                stats = await riot_client(player.region).fetch_participant(session, link.match_id, player.puuid)
                 if stats is None:
                     logger.warning("No se pudo recalcular %s para %s", link.match_id, player.game_name)
                     continue
 
-                participant_id = upsert_participants(db, [stats])[(stats.match_id, stats.puuid)]
+                participant_id = (await upsert_participants(db, [stats]))[(stats.match_id, stats.puuid)]
                 if link.kind == "snapshot" and link.snapshot_id is not None:
-                    link_snapshot(db, link.snapshot_id, [participant_id])
+                    await link_snapshot(db, link.snapshot_id, [participant_id])
                 else:
-                    add_history_entries(db, player.id, [participant_id])
+                    await add_history_entries(db, player.id, [participant_id])
                 link.resolved_at = datetime.now(timezone.utc)
-                db.commit()
+                await db.commit()
+                if link.snapshot_id is not None:
+                    await invalidate_dashboards([link.snapshot_id])
                 repaired += 1
         return repaired, len(links)
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

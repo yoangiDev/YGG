@@ -19,12 +19,12 @@ def _register() -> tuple[dict[str, str], int]:
     return headers, client.get("/auth/me", headers=headers).json()["id"]
 
 
-def test_job_status_is_only_visible_to_its_owner(db_session):
+async def test_job_status_is_only_visible_to_its_owner(db):
     owner_headers, owner_id = _register()
     stranger_headers, _ = _register()
     job_id = unique("job")
-    db_session.add(Job(job_id=job_id, user_id=owner_id, status="processing", progress=40))
-    db_session.commit()
+    db.add(Job(job_id=job_id, user_id=owner_id, status="processing", progress=40))
+    await db.commit()
 
     assert client.get(f"/snapshots/jobs/{job_id}", headers=stranger_headers).status_code == 404
 
@@ -33,10 +33,10 @@ def test_job_status_is_only_visible_to_its_owner(db_session):
     assert response.json()["progress"] == 40
 
 
-def test_jobs_without_owner_are_not_exposed(db_session):
+async def test_jobs_without_owner_are_not_exposed(db):
     headers, _ = _register()
     job_id = unique("legacy-job")
-    db_session.add(Job(job_id=job_id, status="done", progress=100))
-    db_session.commit()
+    db.add(Job(job_id=job_id, status="done", progress=100))
+    await db.commit()
 
     assert client.get(f"/snapshots/jobs/{job_id}", headers=headers).status_code == 404

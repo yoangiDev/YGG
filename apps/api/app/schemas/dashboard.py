@@ -1,10 +1,6 @@
-from pydantic import BaseModel, computed_field
-from typing import Any, Optional
 from datetime import datetime
 
-from ygg_core.metrics import aggregates
-
-from app.schemas.match import MatchResponse
+from pydantic import BaseModel
 
 
 class ChampionStatsResponse(BaseModel):
@@ -16,15 +12,15 @@ class ChampionStatsResponse(BaseModel):
 
 class RadarDataset(BaseModel):
     label: str
-    values: dict[str, float]              # e.g., {"KDA": 4.2, "CS/Min": 8.5, ...}
-    normalized_values: dict[str, float]     # e.g., {"KDA": 70.0, "CS/Min": 85.0, ...}
+    values: dict[str, float]              # p. ej. {"KDA": 4.2, "CS/Min": 8.5}
+    normalized_values: dict[str, float]   # 0-100 respecto al techo del rol
 
 
 class RadarChartData(BaseModel):
-    axes: list[str]                         # Nombres de los ejes
+    axes: list[str]
     player_dataset: RadarDataset
-    rank_datasets: dict[str, RadarDataset]  # "CHALLENGER", ...
-    pro_datasets: dict[str, RadarDataset]   # Cuentas comparadas en vivo
+    rank_datasets: dict[str, RadarDataset]  # "CHALLENGER"
+    pro_datasets: dict[str, RadarDataset]   # cuentas comparadas en vivo
 
 
 class RoleAverageMetric(BaseModel):
@@ -52,63 +48,30 @@ class TrendPoint(BaseModel):
     vision_moving_avg: float
 
 
+class DeathsByPhase(BaseModel):
+    early_deaths: int   # antes del minuto 8
+    mid_deaths: int     # minutos 8-14
+    late_deaths: int    # a partir del 14
+
+
 class SnapshotDashboardResponse(BaseModel):
+    """Dashboard de un snapshot.
+
+    No incluye la lista de partidas (P9): se piden paginadas en
+    GET /matches/snapshot/{snapshot_id}. Así la respuesta cabe en caché y no
+    crece con el número de partidas.
+    """
     snapshot_id: int
     player_id: int
     player_name: str
     date_from: datetime
     date_to: datetime
-    description: str
-    notes: str
+    description: str | None = ""
+    notes: str | None = ""
     active_role: str                        # "TOP" | "JUNGLE" | "MID" | "ADC" | "SUPPORT"
+    games_played: int
     role_averages: list[RoleAverageMetric]
     played_champions: list[ChampionStatsResponse]
-    matches: list[MatchResponse]
+    deaths_by_phase: DeathsByPhase
+    performance_trends: list[TrendPoint]
     radar_data: RadarChartData
-
-    @computed_field
-    @property
-    def deaths_by_phase(self) -> dict[str, int]:
-        """Agrega los eventos de muerte de todas las partidas por fase del juego."""
-        early = 0
-        mid = 0
-        late = 0
-        for m in (self.matches or []):
-            phase_deaths = m.deaths_by_phase
-            early += phase_deaths.get("early_deaths", 0)
-            mid += phase_deaths.get("mid_deaths", 0)
-            late += phase_deaths.get("late_deaths", 0)
-        return {
-            "early_deaths": early,
-            "mid_deaths": mid,
-            "late_deaths": late
-        }
-
-    @computed_field
-    @property
-    def performance_trends(self) -> list[TrendPoint]:
-        """Rendimiento cronológico con medias móviles para alimentar las gráficas."""
-        ordered = sorted(self.matches or [], key=lambda m: m.creation_time)
-        window = aggregates.trend_window_size(len(ordered))
-        kda = aggregates.moving_average([m.kda for m in ordered], window)
-        cs = aggregates.moving_average([m.cs_per_min for m in ordered], window)
-        gold = aggregates.moving_average([m.gold_per_min for m in ordered], window)
-        vision = aggregates.moving_average([m.vision_per_min for m in ordered], window)
-        return [
-            TrendPoint(
-                game_num=index + 1,
-                match_id=m.match_id,
-                creation_time=m.creation_time,
-                champion=m.champion,
-                win=m.win,
-                kda=m.kda,
-                cs_per_min=m.cs_per_min,
-                gold_per_min=m.gold_per_min,
-                vision_per_min=m.vision_per_min,
-                kda_moving_avg=kda[index],
-                cs_moving_avg=cs[index],
-                gold_moving_avg=gold[index],
-                vision_moving_avg=vision[index],
-            )
-            for index, m in enumerate(ordered)
-        ]

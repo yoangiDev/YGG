@@ -25,7 +25,8 @@ class Snapshot(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    player: Mapped[Player] = relationship(back_populates="snapshots")
+    # joined: con AsyncSession no hay carga perezosa y el dashboard necesita el jugador.
+    player: Mapped[Player] = relationship(back_populates="snapshots", lazy="joined")
 
 
 def _add_match_count() -> None:

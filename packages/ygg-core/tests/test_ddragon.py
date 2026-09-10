@@ -18,10 +18,10 @@ def _no_network():
     raise AssertionError("no debería descargar nada")
 
 
-def _filled(store):
-    store.save(VERSION, "item.json", {"data": {"3031": {"name": "Infinity Edge"}}})
-    store.save(VERSION, "runesReforged.json", RUNES)
-    store.save(VERSION, "summoner.json", {"data": {"SummonerFlash": {"key": "4", "name": "Flash"}}})
+async def _filled(store):
+    await store.save(VERSION, "item.json", {"data": {"3031": {"name": "Infinity Edge"}}})
+    await store.save(VERSION, "runesReforged.json", RUNES)
+    await store.save(VERSION, "summoner.json", {"data": {"SummonerFlash": {"key": "4", "name": "Flash"}}})
     return store
 
 
@@ -33,7 +33,7 @@ async def _initialized(store) -> DDragonClient:
 
 
 async def test_loads_from_store_without_downloading():
-    client = await _initialized(_filled(MemoryDDragonStore()))
+    client = await _initialized(await _filled(MemoryDDragonStore()))
     assert client.version == VERSION
     assert client.get_item(3031) == {"name": "Infinity Edge"}
     assert client.get_item("99999") is None
@@ -42,13 +42,20 @@ async def test_loads_from_store_without_downloading():
 
 
 async def test_file_store_roundtrip(tmp_path):
-    client = await _initialized(_filled(FileDDragonStore(tmp_path)))
+    client = await _initialized(await _filled(FileDDragonStore(tmp_path)))
     assert client.find_rune(8100)["name"] == "Domination"
     assert (tmp_path / f"{VERSION}_item.json").exists()
 
 
+async def test_incomplete_store_is_not_used():
+    store = MemoryDDragonStore()
+    await store.save(VERSION, "item.json", {"data": {}})
+    client = DDragonClient(store, session_factory=_no_network)
+    assert await client._load_all(VERSION) is False
+
+
 async def test_find_rune_tree_and_keystone():
-    client = await _initialized(_filled(MemoryDDragonStore()))
+    client = await _initialized(await _filled(MemoryDDragonStore()))
     assert client.find_rune(8100)["key"] == "Domination"
     assert client.find_rune(8112)["key"] == "Electrocute"
     assert client.find_rune(1) is None

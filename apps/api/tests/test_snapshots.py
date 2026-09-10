@@ -1,15 +1,14 @@
-"""Endpoints de snapshots y cableado de los schemas del dashboard.
+"""Endpoints de snapshots y agregados del dashboard.
 
-Las métricas de timeline (gank deaths, visión de objetivos, dragon setups)
-se testean en packages/ygg-core, que es donde viven.
+Las métricas de timeline se testean en packages/ygg-core, que es donde viven.
 """
 
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app.schemas.dashboard import RadarChartData, RadarDataset, SnapshotDashboardResponse
 from app.schemas.match import MatchResponse
+from app.service.dashboard import aggregate_deaths_by_phase, performance_trends
 from main import app
 
 client = TestClient(app)
@@ -17,34 +16,33 @@ client = TestClient(app)
 
 class TestSnapshotsAuth:
     def test_list_snapshots_requires_auth(self):
-        response = client.get("/snapshots/player/1")
-        assert response.status_code == 403
+        assert client.get("/snapshots/player/1").status_code == 401
 
     def test_get_snapshot_requires_auth(self):
-        response = client.get("/snapshots/99999")
-        assert response.status_code == 403
+        assert client.get("/snapshots/99999").status_code == 401
 
     def test_job_status_requires_auth(self):
-        response = client.get("/snapshots/jobs/some-job-id")
-        assert response.status_code == 403
+        assert client.get("/snapshots/jobs/some-job-id").status_code == 401
 
 
 class TestSnapshotsCRUD:
     def test_get_snapshot_not_found(self, auth_headers):
-        response = client.get("/snapshots/99999", headers=auth_headers)
-        assert response.status_code == 404
+        assert client.get("/snapshots/99999", headers=auth_headers).status_code == 404
 
     def test_list_snapshots_player_not_found(self, auth_headers):
-        response = client.get("/snapshots/player/99999", headers=auth_headers)
-        assert response.status_code == 404
+        assert client.get("/snapshots/player/99999", headers=auth_headers).status_code == 404
+
+    def test_dashboard_not_found(self, auth_headers):
+        assert client.get("/snapshots/99999/dashboard", headers=auth_headers).status_code == 404
+
+    def test_matches_of_unknown_snapshot_not_found(self, auth_headers):
+        assert client.get("/matches/snapshot/99999", headers=auth_headers).status_code == 404
 
     def test_job_not_found(self, auth_headers):
-        response = client.get("/snapshots/jobs/nonexistent-job-id", headers=auth_headers)
-        assert response.status_code == 404
+        assert client.get("/snapshots/jobs/nonexistent-job-id", headers=auth_headers).status_code == 404
 
     def test_delete_snapshot_not_found(self, auth_headers):
-        response = client.delete("/snapshots/99999", headers=auth_headers)
-        assert response.status_code == 404
+        assert client.delete("/snapshots/99999", headers=auth_headers).status_code == 404
 
 
 def _match(match_id: str, **overrides) -> MatchResponse:
@@ -57,31 +55,18 @@ def _match(match_id: str, **overrides) -> MatchResponse:
     return MatchResponse(**values)
 
 
-def _dashboard(matches: list[MatchResponse], role: str = "MID") -> SnapshotDashboardResponse:
-    return SnapshotDashboardResponse(
-        snapshot_id=1, player_id=1, player_name="Test#EUW", date_from=datetime.now(),
-        date_to=datetime.now(), description="Test", notes="", active_role=role,
-        role_averages=[], played_champions=[], matches=matches,
-        radar_data=RadarChartData(
-            axes=[], player_dataset=RadarDataset(label="", values={}, normalized_values={}),
-            rank_datasets={}, pro_datasets={},
-        ),
-    )
-
-
-class TestDashboardSchemas:
+class TestDashboardAggregates:
     def test_match_response_deaths_by_phase(self):
         deaths = [{"time": t, "x": 1000, "y": 1000} for t in (100, 479, 480, 800, 840, 1200)]
         assert _match("EUW_123", death_events=deaths).deaths_by_phase == {
             "early_deaths": 2, "mid_deaths": 2, "late_deaths": 2,
         }
 
-    def test_dashboard_aggregates_deaths_by_phase(self):
-        first = _match("EUW_1", deaths=2, death_events=[{"time": 300}, {"time": 600}])
-        second = _match("EUW_2", deaths=3, death_events=[{"time": 1000}, {"time": 1200}, {"time": 200}])
-        assert _dashboard([first, second]).deaths_by_phase == {
-            "early_deaths": 2, "mid_deaths": 1, "late_deaths": 2,
-        }
+    def test_deaths_by_phase_are_aggregated_across_matches(self):
+        first = _match("EUW_1", death_events=[{"time": 300}, {"time": 600}])
+        second = _match("EUW_2", death_events=[{"time": 1000}, {"time": 1200}, {"time": 200}])
+        totals = aggregate_deaths_by_phase([first, second])
+        assert (totals.early_deaths, totals.mid_deaths, totals.late_deaths) == (2, 1, 2)
 
     def test_match_response_coordinates_normalization(self):
         match = _match(
@@ -92,19 +77,11 @@ class TestDashboardSchemas:
         assert [(d["norm_x"], d["norm_y"]) for d in match.death_events_normalized] == [(0.0, 1.0), (1.0, 0.0)]
         assert (match.ward_events_normalized[0]["norm_x"], match.ward_events_normalized[0]["norm_y"]) == (0.2, 0.2)
 
-    def test_dragon_setups_summary(self):
-        match = _match("EUW1_TEST", dragon_setups=[
-            {"team_dragon": True, "in_prep_zone": True, "at_kill_zone": True, "secured_by_jg": True},
-            {"team_dragon": True, "in_prep_zone": False, "at_kill_zone": False, "secured_by_jg": False},
-        ])
-        assert match.dragon_setups_summary["setup_rate"] == 50.0
-
     def test_performance_trends_are_chronological_with_moving_average(self):
         now = datetime.now()
-        # KDA 2 y 4, desordenadas a propósito.
         older = _match("EUW_T1", kills=2, deaths=2, assists=2, creation_time=now - timedelta(days=2))
         newer = _match("EUW_T2", kills=4, deaths=2, assists=4, creation_time=now - timedelta(days=1))
-        trends = _dashboard([newer, older], role="ADC").performance_trends
+        trends = performance_trends([newer, older])
         assert [(t.match_id, t.game_num, t.kda, t.kda_moving_avg) for t in trends] == [
             ("EUW_T1", 1, 2.0, 2.0),
             ("EUW_T2", 2, 4.0, 3.0),

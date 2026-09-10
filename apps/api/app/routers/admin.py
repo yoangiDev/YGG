@@ -1,16 +1,15 @@
-import bcrypt
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin
-from app.db.models.match import Match
+from app.auth.passwords import NewPassword, hash_password
 from app.db.models.player import Player
-from app.db.models.snapshot import Snapshot
 from app.db.models.user import User
 from app.db.session import get_db
+from app.queries import load
+from app.schemas.common import Page, PageParams
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -34,7 +33,7 @@ class RoleUpdate(BaseModel):
 class UserCreate(BaseModel):
     email: EmailStr
     username: str
-    password: str
+    password: NewPassword
     role: str = "user"
 
 
@@ -42,13 +41,16 @@ class TierCount(BaseModel):
     tier: str
     count: int
 
+
 class RegionCount(BaseModel):
     region: str
     count: int
 
+
 class TopUser(BaseModel):
     username: str
     player_count: int
+
 
 class AdminPlayerOut(BaseModel):
     id: int
@@ -64,7 +66,6 @@ class AdminPlayerOut(BaseModel):
     losses: int
     owner_username: str
 
-    model_config = {"from_attributes": True}
 
 class GlobalStats(BaseModel):
     total_users: int
@@ -82,19 +83,35 @@ class DeleteInactiveResult(BaseModel):
     deleted: int
 
 
-# ── GET /admin/players/ ───────────────────────────────────────────────────────
+async def _get_user(db: AsyncSession, user_id: int) -> User:
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return user
 
-@router.get("/players/", response_model=list[AdminPlayerOut])
-def list_all_players(
-    db: Session = Depends(get_db),
+
+def _validate_role(role: str) -> None:
+    if role not in ("user", "admin"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role. Use 'user' or 'admin'.")
+
+
+# ── Jugadores ──────────────────────────────────────────────────────────────────
+
+@router.get("/players/", response_model=Page[AdminPlayerOut])
+async def list_all_players(
+    page: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    rows = db.execute(
+    total = await db.scalar(select(func.count(Player.id))) or 0
+    rows = await db.execute(
         select(Player, User.username)
         .join(User, User.id == Player.user_id)
-        .order_by(User.username, Player.game_name)
-    ).all()
-    return [
+        .order_by(User.username, Player.game_name, Player.id)
+        .limit(page.limit)
+        .offset(page.offset)
+    )
+    items = [
         AdminPlayerOut(
             id=player.id,
             game_name=player.game_name,
@@ -111,188 +128,115 @@ def list_all_players(
         )
         for player, username in rows
     ]
+    return Page[AdminPlayerOut](items=items, total=total, limit=page.limit, offset=page.offset)
 
-
-# ── DELETE /admin/players/{id} ────────────────────────────────────────────────
 
 @router.delete("/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
-def admin_delete_player(
-    player_id: int,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    player = db.get(Player, player_id)
+async def admin_delete_player(player_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    player = await db.get(Player, player_id)
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
-    db.delete(player)
-    db.commit()
+    await db.delete(player)
+    await db.commit()
 
 
-# ── GET /admin/stats/ ─────────────────────────────────────────────────────────
+# ── Estadísticas ───────────────────────────────────────────────────────────────
 
 @router.get("/stats/", response_model=GlobalStats)
-def get_global_stats(
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    total_users = db.scalar(select(func.count(User.id))) or 0
-    active_users = db.scalar(select(func.count(User.id)).where(User.is_active.is_(True))) or 0
+async def get_global_stats(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    counts = (await db.execute(load("global_counts"))).mappings().one()
     player_count = func.count(Player.id)
 
-    tier_rows = db.execute(
-        select(Player.tier, player_count).where(Player.tier != "").group_by(Player.tier)
-    ).all()
-    region_rows = db.execute(
+    tier_rows = await db.execute(select(Player.tier, player_count).where(Player.tier != "").group_by(Player.tier))
+    region_rows = await db.execute(
         select(Player.region, player_count).group_by(Player.region).order_by(player_count.desc())
-    ).all()
-    top_rows = db.execute(
+    )
+    top_rows = await db.execute(
         select(User.username, player_count)
         .outerjoin(Player, Player.user_id == User.id)
         .group_by(User.id, User.username)
         .order_by(player_count.desc())
         .limit(5)
-    ).all()
+    )
 
     return GlobalStats(
-        total_users=total_users,
-        active_users=active_users,
-        inactive_users=total_users - active_users,
-        total_players=db.scalar(select(func.count(Player.id))) or 0,
-        total_snapshots=db.scalar(select(func.count(Snapshot.id))) or 0,
-        total_matches=db.scalar(select(func.count(Match.match_id))) or 0,
+        total_users=counts["total_users"],
+        active_users=counts["active_users"],
+        inactive_users=counts["total_users"] - counts["active_users"],
+        total_players=counts["total_players"],
+        total_snapshots=counts["total_snapshots"],
+        total_matches=counts["total_matches"],
         tier_distribution=[TierCount(tier=tier, count=count) for tier, count in tier_rows],
         region_distribution=[RegionCount(region=region, count=count) for region, count in region_rows],
         top_users=[TopUser(username=name, player_count=count) for name, count in top_rows],
     )
 
 
-# ── GET /admin/users/ ──────────────────────────────────────────────────────────
+# ── Usuarios ───────────────────────────────────────────────────────────────────
 
-@router.get("/users/", response_model=list[UserOut])
-def list_users(
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    return list(db.scalars(select(User).order_by(User.id)))
+@router.get("/users/", response_model=Page[UserOut])
+async def list_users(page: PageParams = Depends(), db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    total = await db.scalar(select(func.count(User.id))) or 0
+    users = await db.scalars(select(User).order_by(User.id).limit(page.limit).offset(page.offset))
+    return Page[UserOut](
+        items=[UserOut.model_validate(u) for u in users], total=total, limit=page.limit, offset=page.offset
+    )
 
-
-# ── PATCH /admin/users/{id}/role ───────────────────────────────────────────────
 
 @router.patch("/users/{user_id}/role", response_model=UserOut)
-def update_user_role(
+async def update_user_role(
     user_id: int,
     body: RoleUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     if current_user.id == user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot change your own role.",
-        )
-    if body.role not in ("user", "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role. Use 'user' or 'admin'.",
-        )
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot change your own role.")
+    _validate_role(body.role)
+    user = await _get_user(db, user_id)
     user.role = body.role
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
-
-# ── PATCH /admin/users/{id}/active ────────────────────────────────────────────
 
 @router.patch("/users/{user_id}/active", response_model=UserOut)
-def toggle_user_active(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
+async def toggle_user_active(user_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin)):
     if user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot deactivate your own account.",
-        )
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own account.")
+    user = await _get_user(db, user_id)
     user.is_active = not user.is_active
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
-# ── DELETE /admin/users/inactive ─────────────────────────────────────────────
-
 @router.delete("/users/inactive", response_model=DeleteInactiveResult)
-def delete_inactive_users(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    inactive = list(
-        db.scalars(select(User).where(User.is_active.is_(False), User.id != current_user.id))
-    )
+async def delete_inactive_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin)):
+    inactive = list(await db.scalars(select(User).where(User.is_active.is_(False), User.id != current_user.id)))
     for user in inactive:
-        db.delete(user)
-    db.commit()
+        await db.delete(user)
+    await db.commit()
     return DeleteInactiveResult(deleted=len(inactive))
 
 
-# ── DELETE /admin/users/{id} ──────────────────────────────────────────────────
-
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin)):
     if user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot delete your own account.",
-        )
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    db.delete(user)
-    db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account.")
+    await db.delete(await _get_user(db, user_id))
+    await db.commit()
 
-
-# ── POST /admin/users/ ─────────────────────────────────────────────────────────
 
 @router.post("/users/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user(
-    body: UserCreate,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    if body.role not in ("user", "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role. Use 'user' or 'admin'.",
-        )
-    if db.scalar(select(User.id).where(User.email == body.email)) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This email is already registered.",
-        )
-    if db.scalar(select(User.id).where(User.username == body.username)) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This username is already taken.",
-        )
-    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
-    user = User(
-        email=body.email,
-        username=body.username,
-        hashed_password=hashed,
-        role=body.role,
-    )
+async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    _validate_role(body.role)
+    if await db.scalar(select(User.id).where(User.email == body.email)) is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is already registered.")
+    if await db.scalar(select(User.id).where(User.username == body.username)) is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This username is already taken.")
+    user = User(email=body.email, username=body.username, hashed_password=hash_password(body.password), role=body.role)
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user

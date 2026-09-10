@@ -1,9 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from main import app
+
+from app.core.config import settings
 from app.db.session import SessionLocal
+from main import app
+from tests.helpers import unique
+
+
+@pytest.fixture(autouse=True)
+def _rate_limits_off(monkeypatch):
+    """Todos los tests comparten IP ("testclient"): los límites solo se activan donde se prueban."""
+    monkeypatch.setattr(settings, "rate_limit_enabled", False)
 
 
 @pytest.fixture
@@ -12,28 +19,17 @@ def client():
 
 
 @pytest.fixture
-def db_session() -> Session:
-    """Create a test database session with automatic rollback."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        # Rollback any uncommitted changes
-        db.rollback()
-        db.close()
+async def db():
+    async with SessionLocal() as session:
+        yield session
 
 
 @pytest.fixture
 def auth_token(client):
-    import uuid
-    unique = str(uuid.uuid4())[:8]
-    client.post(
-        "/auth/register",
-        json={"email": f"pytest_{unique}@example.com", "username": f"user_{unique}", "password": "password123"}
-    )
+    name = unique("pytest")
     response = client.post(
-        "/auth/login",
-        json={"email": f"pytest_{unique}@example.com", "password": "password123"}
+        "/auth/register",
+        json={"email": f"{name}@example.com", "username": name, "password": "password123"},
     )
     return response.json()["access_token"]
 

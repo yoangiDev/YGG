@@ -1,13 +1,15 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from ygg_core.riot.routing import platform_from_region
 
 from app.db.models.rank_cutoff import RankCutoff
 from app.service.riot import create_secure_session, riot_client
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["get_rank_cutoffs", "is_stale", "platform_from_region", "upsert_cutoffs"]
 
 _CACHE_TTL = timedelta(hours=4)
 
@@ -29,11 +31,7 @@ def _cutoff_lp(entries: list[dict], rank_position: int) -> int | None:
         if existing is None or entry["leaguePoints"] > existing["leaguePoints"]:
             by_puuid[puuid] = entry
 
-    combined = sorted(
-        by_puuid.values(),
-        key=lambda entry: entry["leaguePoints"],
-        reverse=True,
-    )
+    combined = sorted(by_puuid.values(), key=lambda entry: entry["leaguePoints"], reverse=True)
     index = min(rank_position - 1, len(combined) - 1)
     return int(combined[index]["leaguePoints"])
 
@@ -47,24 +45,11 @@ async def fetch_cutoffs_from_riot(region: str) -> tuple[int, int]:
         grandmaster_entries = await client.fetch_league_entries(session, "grandmasterleagues")
 
     combined = challenger_entries + grandmaster_entries
-    if not combined:
-        raise ConnectionError(
-            f"Could not fetch rank cutoffs for region '{region}'."
-        )
-
     ch_lp = _cutoff_lp(combined, CHALLENGER_CUTOFF_RANK)
     gm_lp = _cutoff_lp(combined, GRANDMASTER_CUTOFF_RANK)
-
     if gm_lp is None or ch_lp is None:
-        raise ConnectionError(
-            f"Could not fetch rank cutoffs for region '{region}'."
-        )
-
+        raise ConnectionError(f"Could not fetch rank cutoffs for region '{region}'.")
     return gm_lp, ch_lp
-
-
-def get_cached_cutoffs(db: Session, platform: str) -> RankCutoff | None:
-    return db.get(RankCutoff, platform)
 
 
 def is_stale(record: RankCutoff) -> bool:
@@ -74,42 +59,27 @@ def is_stale(record: RankCutoff) -> bool:
     return datetime.now(timezone.utc) - fetched_at > _CACHE_TTL
 
 
-def upsert_cutoffs(
-    db: Session,
-    platform: str,
-    grandmaster_cutoff_lp: int,
-    challenger_cutoff_lp: int,
+async def upsert_cutoffs(
+    db: AsyncSession, platform: str, grandmaster_cutoff_lp: int, challenger_cutoff_lp: int
 ) -> RankCutoff:
-    record = get_cached_cutoffs(db, platform)
+    record = await db.get(RankCutoff, platform)
     now = datetime.now(timezone.utc)
     if record is None:
-        record = RankCutoff(
-            platform=platform,
-            grandmaster_cutoff_lp=grandmaster_cutoff_lp,
-            challenger_cutoff_lp=challenger_cutoff_lp,
-            fetched_at=now,
-        )
+        record = RankCutoff(platform=platform, fetched_at=now)
         db.add(record)
-    else:
-        record.grandmaster_cutoff_lp = grandmaster_cutoff_lp
-        record.challenger_cutoff_lp = challenger_cutoff_lp
-        record.fetched_at = now
-    db.commit()
-    db.refresh(record)
+    record.grandmaster_cutoff_lp = grandmaster_cutoff_lp
+    record.challenger_cutoff_lp = challenger_cutoff_lp
+    record.fetched_at = now
+    await db.commit()
+    await db.refresh(record)
     return record
 
 
-async def get_rank_cutoffs(
-    db: Session,
-    region: str,
-    *,
-    refresh: bool = False,
-) -> RankCutoff:
+async def get_rank_cutoffs(db: AsyncSession, region: str, *, refresh: bool = False) -> RankCutoff:
     platform = platform_from_region(region)
-    cached = get_cached_cutoffs(db, platform)
-
+    cached = await db.get(RankCutoff, platform)
     if cached is not None and not refresh and not is_stale(cached):
         return cached
 
     gm_lp, ch_lp = await fetch_cutoffs_from_riot(region)
-    return upsert_cutoffs(db, platform, gm_lp, ch_lp)
+    return await upsert_cutoffs(db, platform, gm_lp, ch_lp)

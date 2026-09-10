@@ -1,30 +1,41 @@
-# ── Web Framework ─────────────────────────────────────────────────────────────
-fastapi==0.115.0
-uvicorn[standard]==0.30.6          # Servidor ASGI para correr FastAPI
-python-multipart==0.0.12           # Necesario para UploadFile en FastAPI
+# El motor de análisis se instala aparte:
+#   pip install -e ../../packages/ygg-core
 
-# ── Base de datos ──────────────────────────────────────────────────────────────
-sqlalchemy==2.0.35                 # ORM principal
-alembic==1.13.3                    # Migraciones de base de datos
-psycopg2-binary==2.9.11            # Driver PostgreSQL
+# ── Web ───────────────────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32           # UploadFile (avatar)
 
-# ── Validación y schemas ───────────────────────────────────────────────────────
-pydantic==2.9.2                    # Modelos y validación (schemas/)
-pydantic-settings==2.5.2           # Leer variables de entorno (.env)
-pydantic[email]==2.9.2             # Validación de emails en schemas
+# ── Base de datos ─────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.52
+asyncpg==0.31.0                    # driver asíncrono de la aplicación
+psycopg2-binary==2.9.13            # driver síncrono de Alembic y scripts de mantenimiento
+alembic==1.19.2
 
-# ── Autenticación ──────────────────────────────────────────────────────────────
-python-jose[cryptography]==3.3.0   # Generación y validación de JWT
-bcrypt==4.0.1                      # Hashing de contraseñas
+# ── Validación y configuración ────────────────────────────────────────────────
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+python-dotenv==1.0.1
 
-# ── Riot API / HTTP ────────────────────────────────────────────────────────────
-aiohttp==3.10.5                    # Cliente HTTP asíncrono (riot_client.py)
-certifi==2024.8.30                 # Certificados SSL (http_client.py)
+# ── Autenticación ─────────────────────────────────────────────────────────────
+pyjwt==2.13.0
+bcrypt==5.0.0
 
-# ── Variables de entorno ───────────────────────────────────────────────────────
-python-dotenv==1.0.1               # Cargar .env en local
+# ── Redis: caché, rate limiting y cola ────────────────────────────────────────
+redis==5.3.1                       # la versión que admite arq
+fakeredis==2.38.0                  # REDIS_URL=memory:// en local y tests sin Redis
 
-# ── Testing ─────────────────────────────────────────────────────────────────
-pytest==8.3.3                    # Tests unitarios
-pytest-asyncio==0.24.0           # Tests async
-httpx==0.27.2                    # Requerido por fastapi.testclient.TestClient
+# ── Observabilidad ────────────────────────────────────────────────────────────
+structlog==26.1.0
+sentry-sdk==2.69.1
+prometheus-fastapi-instrumentator==8.1.0
+
+# ── Riot API / HTTP ───────────────────────────────────────────────────────────
+aiohttp==3.10.5
+certifi==2024.8.30
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1                      # TestClient

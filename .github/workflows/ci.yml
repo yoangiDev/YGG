@@ -85,7 +85,7 @@ jobs:
       ENVIRONMENT: test
       DATABASE_URL: postgresql://ygg:ygg@localhost:5432/ygg_test
       REDIS_URL: redis://localhost:6379/0
-      SECRET_KEY: ci-only-secret
+      SECRET_KEY: ci-only-secret-at-least-32-bytes-long
       RIOT_API_KEY: RGAPI-ci-placeholder
     defaults:
       run:
