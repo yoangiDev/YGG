@@ -1,0 +1,17 @@
+# Configuración de herramientas compartida por todo el monorepo.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["apps/flutter", "apps/api/alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "I", "UP", "DTZ", "SIM", "RUF"]
+ignore = [
+    "B008",  # Depends()/Query() en firmas de FastAPI es el patrón idiomático
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Código heredado del TFG: las reglas se van activando a medida que cada fase
+# del plan reescribe el módulo. El código nuevo (packages/) no tiene excepciones.
+"apps/api/**" = ["F401", "F811", "F541", "B", "I", "UP", "DTZ", "SIM", "RUF", "E7"]

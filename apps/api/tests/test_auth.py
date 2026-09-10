@@ -36,13 +36,16 @@ class TestAuthRegister:
         import uuid
         unique = str(uuid.uuid4())[:8]
         email = f"dup_{unique}@example.com"
-        client.post(
+        # Usernames únicos por ejecución: con valores fijos el test dependía
+        # del estado que dejaron ejecuciones anteriores en la misma base.
+        first = client.post(
             "/auth/register",
-            json={"email": email, "username": "user1", "password": "pass123"}
+            json={"email": email, "username": f"dup1_{unique}", "password": "pass123"}
         )
+        assert first.status_code == 201
         response = client.post(
             "/auth/register",
-            json={"email": email, "username": "user2", "password": "pass123"}
+            json={"email": email, "username": f"dup2_{unique}", "password": "pass123"}
         )
         assert response.status_code == 400
 
@@ -80,10 +83,11 @@ class TestAuthLogin:
         unique = str(uuid.uuid4())[:8]
         email = f"wrongpass_{unique}@example.com"
         
-        client.post(
+        registered = client.post(
             "/auth/register",
-            json={"email": email, "username": "user", "password": "correct"}
+            json={"email": email, "username": f"wrongpass_{unique}", "password": "correct"}
         )
+        assert registered.status_code == 201
         response = client.post(
             "/auth/login",
             json={"email": email, "password": "incorrect"}

@@ -1,28 +1,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from pydantic_settings import BaseSettings
 
+from app.core.config import settings
 
-class Settings(BaseSettings):
-    """Lee las variables del .env automáticamente."""
-    database_url: str
-    riot_api_key: str
-    secret_key: str
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    supabase_url: str = ""
-    supabase_service_key: str = ""
-
-    model_config = {"env_file": ".env", "extra": "ignore"}
-
-
-settings = Settings()
+__all__ = ["engine", "SessionLocal", "get_db", "settings"]
 
 # ── Motor de conexión ──────────────────────────────────────────────────────────
 engine = create_engine(
     settings.database_url,
-    pool_size=5,           # Conexiones simultáneas (equivale a tu DB_POOL_SIZE)
-    max_overflow=10,       # Conexiones extra si el pool está lleno
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,    # Verifica que la conexión sigue viva antes de usarla
     echo=False,            # Cambiar a True para ver el SQL generado en desarrollo
 )

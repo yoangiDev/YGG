@@ -40,7 +40,7 @@ class TestRiotRateLimiter:
 class TestFetchMatchesCache:
     @pytest.mark.asyncio
     async def test_skips_api_for_timeline_enriched_matches(self):
-        from datetime import datetime
+        from datetime import datetime, timezone
         from unittest.mock import AsyncMock, patch
 
         from app.db.models.match import Match
@@ -54,9 +54,11 @@ class TestFetchMatchesCache:
             puuid="puuid-test",
             region="euw",
         )
+        # Fecha fija anterior a la temporada 26: con datetime.now() el test
+        # caducó el 1-1-2026, cuando la caché empezó a exigir datos de Role Quest.
         cached = Match(
             match_id="EUW1_CACHED",
-            creation_time=datetime.now(),
+            creation_time=datetime(2025, 6, 1, tzinfo=timezone.utc),
             champion="LeeSin",
             win=True,
             duration=1800,

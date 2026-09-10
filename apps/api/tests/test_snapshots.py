@@ -1,5 +1,10 @@
+from datetime import datetime
+
 import pytest
 from fastapi.testclient import TestClient
+
+from app.schemas.dashboard import RadarChartData, RadarDataset, SnapshotDashboardResponse
+from app.schemas.match import MatchResponse
 from main import app
 
 client = TestClient(app)
@@ -36,10 +41,6 @@ class TestSnapshotsCRUD:
         response = client.delete("/snapshots/99999", headers=auth_headers)
         assert response.status_code == 404
 
-
-from app.schemas.match import MatchResponse
-from app.schemas.dashboard import SnapshotDashboardResponse, RadarChartData, RadarDataset
-from datetime import datetime
 
 class TestDeathsByPhaseSchema:
     def test_match_response_deaths_by_phase(self):

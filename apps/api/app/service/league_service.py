@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 from sqlalchemy.orm import Session
@@ -98,7 +98,10 @@ def get_cached_cutoffs(db: Session, platform: str) -> RankCutoff | None:
 
 
 def is_stale(record: RankCutoff) -> bool:
-    return datetime.utcnow() - record.fetched_at > _CACHE_TTL
+    fetched_at = record.fetched_at
+    if fetched_at.tzinfo is None:  # filas anteriores a la migración a timestamptz
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - fetched_at > _CACHE_TTL
 
 
 def upsert_cutoffs(
@@ -108,7 +111,7 @@ def upsert_cutoffs(
     challenger_cutoff_lp: int,
 ) -> RankCutoff:
     record = get_cached_cutoffs(db, platform)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if record is None:
         record = RankCutoff(
             platform=platform,

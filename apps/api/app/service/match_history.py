@@ -11,6 +11,7 @@ from app.db.models.player_match_history import PlayerMatchHistory
 logger = logging.getLogger(__name__)
 
 _HISTORY_TTL = timedelta(hours=1)
+DEFAULT_HISTORY_LIMIT = 100
 
 
 def is_history_fresh(player: Player) -> bool:
@@ -19,12 +20,15 @@ def is_history_fresh(player: Player) -> bool:
     return datetime.now(timezone.utc) - player.match_history_cached_at < _HISTORY_TTL
 
 
-def get_history_from_cache(db: Session, player_id: int) -> list[Match]:
+def get_history_from_cache(
+    db: Session, player_id: int, limit: int = DEFAULT_HISTORY_LIMIT
+) -> list[Match]:
     return (
         db.query(Match)
         .join(PlayerMatchHistory, PlayerMatchHistory.match_id == Match.id)
         .filter(PlayerMatchHistory.player_id == player_id)
         .order_by(Match.creation_time.desc())
+        .limit(limit)
         .all()
     )
 

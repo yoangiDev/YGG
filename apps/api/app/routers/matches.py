@@ -53,7 +53,7 @@ async def list_live_matches(
     force_refresh = live or sync
 
     if not force_refresh and is_history_fresh(player):
-        cached = get_history_from_cache(db, player_id)
+        cached = get_history_from_cache(db, player_id, limit=limit)
         if cached:
             return _to_responses(cached)
 

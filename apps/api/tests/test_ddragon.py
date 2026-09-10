@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 from main import app
 
@@ -8,7 +10,8 @@ class TestDDragonVersion:
     def test_get_version(self):
         response = client.get("/ddragon/version")
         assert response.status_code == 200
-        assert response.json() == "16.10.1"
+        # La versión real cambia con cada parche; solo comprobamos el formato.
+        assert re.fullmatch(r"\d+\.\d+\.\d+", response.json())
 
 
 class TestDDragonItems:
