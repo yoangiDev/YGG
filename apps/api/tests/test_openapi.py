@@ -4,11 +4,17 @@ import json
 from pathlib import Path
 
 from fastapi.routing import APIRoute
+from sse_starlette.sse import EventSourceResponse
 
 from main import app
 
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi.json"
 NO_BODY_STATUS = {204, 307}
+
+
+def _documented_without_model(route: APIRoute) -> bool:
+    # Sin cuerpo (204, redirecciones) o flujos SSE, documentados con `responses`.
+    return route.status_code in NO_BODY_STATUS or route.response_class is EventSourceResponse
 
 
 def test_every_route_declares_its_response_model():
@@ -18,7 +24,7 @@ def test_every_route_declares_its_response_model():
         if isinstance(route, APIRoute)
         and route.include_in_schema
         and route.response_model is None
-        and route.status_code not in NO_BODY_STATUS
+        and not _documented_without_model(route)
     ]
     assert missing == []
 

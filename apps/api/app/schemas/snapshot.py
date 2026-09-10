@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, field_validator, model_validator
+
+JobStatusValue = Literal["queued", "processing", "done", "error"]
 
 
 class SnapshotCreate(BaseModel):
@@ -46,15 +49,16 @@ class SnapshotDescriptionUpdate(BaseModel):
 
 
 class SnapshotJobResponse(BaseModel):
-    """Respuesta inmediata al crear un snapshot (tarea en background)."""
+    """Respuesta al lanzar un análisis. Si ya había uno igual en marcha, es ese mismo job."""
     job_id: str
-    status: str = "processing"
+    status: JobStatusValue = "queued"
 
 
 class SnapshotJobStatus(BaseModel):
-    """Estado de un job en curso."""
+    """Estado de un análisis. Mismo formato en GET /jobs/{id} y en los eventos SSE."""
     job_id: str
-    status: str             # "processing" | "done" | "error"
+    status: JobStatusValue
     progress: int = 0       # 0-100
     snapshot_id: int | None = None
     error: str | None = None
+    attempts: int = 0

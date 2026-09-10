@@ -996,7 +996,7 @@
           "snapshots"
         ],
         "summary": "Create Snapshot",
-        "description": "Lanza el análisis de un período. Devuelve un job_id; el análisis corre en segundo plano.",
+        "description": "Encola el análisis de un período y devuelve su job.\n\nIdempotente: si ya hay un análisis en marcha del mismo jugador y rango, se\ndevuelve ese job en lugar de lanzar otro. El progreso se sigue por SSE en\nGET /snapshots/jobs/{job_id}/stream.",
         "operationId": "snapshots_create_snapshot",
         "requestBody": {
           "content": {
@@ -1022,6 +1022,9 @@
           "429": {
             "description": "Too many analyses requested"
           },
+          "503": {
+            "description": "Queue unavailable"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1046,7 +1049,6 @@
           "snapshots"
         ],
         "summary": "Get Job Status",
-        "description": "Estado de un análisis. Solo lo ve quien lo lanzó; para cualquier otro es un 404.",
         "operationId": "snapshots_get_job_status",
         "security": [
           {
@@ -1074,6 +1076,101 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/snapshots/jobs/{job_id}/stream": {
+      "get": {
+        "tags": [
+          "snapshots"
+        ],
+        "summary": "Stream Job",
+        "description": "Progreso en tiempo real por Server-Sent Events.\n\nSSE y no WebSockets: el flujo es unidireccional, funciona sobre HTTP normal\ny el navegador se reconecta solo. Al conectar (o reconectar) se envía\nprimero el estado actual.",
+        "operationId": "snapshots_stream_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eventos `progress`, `done` y `error` con un SnapshotJobStatus en JSON",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/snapshots/jobs/{job_id}/retry": {
+      "post": {
+        "tags": [
+          "snapshots"
+        ],
+        "summary": "Retry Job",
+        "description": "Vuelve a encolar un análisis fallido (por ejemplo, uno interrumpido).",
+        "operationId": "snapshots_retry_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotJobStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The job has not failed, or an equivalent analysis is running"
           },
           "422": {
             "description": "Validation Error",
@@ -3884,8 +3981,14 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "done",
+              "error"
+            ],
             "title": "Status",
-            "default": "processing"
+            "default": "queued"
           }
         },
         "type": "object",
@@ -3893,7 +3996,7 @@
           "job_id"
         ],
         "title": "SnapshotJobResponse",
-        "description": "Respuesta inmediata al crear un snapshot (tarea en background)."
+        "description": "Respuesta al lanzar un análisis. Si ya había uno igual en marcha, es ese mismo job."
       },
       "SnapshotJobStatus": {
         "properties": {
@@ -3903,6 +4006,12 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "done",
+              "error"
+            ],
             "title": "Status"
           },
           "progress": {
@@ -3931,6 +4040,11 @@
               }
             ],
             "title": "Error"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts",
+            "default": 0
           }
         },
         "type": "object",
@@ -3939,7 +4053,7 @@
           "status"
         ],
         "title": "SnapshotJobStatus",
-        "description": "Estado de un job en curso."
+        "description": "Estado de un análisis. Mismo formato en GET /jobs/{id} y en los eventos SSE."
       },
       "SnapshotNotesUpdate": {
         "properties": {

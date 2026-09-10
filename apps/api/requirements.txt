@@ -25,6 +25,8 @@ bcrypt==5.0.0
 # ── Redis: caché, rate limiting y cola ────────────────────────────────────────
 redis==5.3.1                       # la versión que admite arq
 fakeredis==2.38.0                  # REDIS_URL=memory:// en local y tests sin Redis
+arq==0.28.0                        # cola de trabajos y worker
+sse-starlette==3.4.11              # progreso de los análisis por Server-Sent Events
 
 # ── Observabilidad ────────────────────────────────────────────────────────────
 structlog==26.1.0

@@ -1,9 +1,11 @@
-import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
@@ -16,10 +18,12 @@ from app.crud.snapshot import (
     update_snapshot_description,
     update_snapshot_notes,
 )
-from app.db.models.job import Job
+from app.db.models.job import ACTIVE_JOB_STATUSES, Job
 from app.db.models.snapshot import Snapshot
 from app.db.models.user import User
-from app.db.session import SessionLocal, get_db
+from app.db.session import get_db
+from app.jobs.progress import job_event_stream, job_status_from_row, publish_job_state, update_job
+from app.jobs.queue import JobQueue, get_job_queue
 from app.schemas.common import Page, PageParams
 from app.schemas.dashboard import SnapshotDashboardResponse
 from app.schemas.snapshot import (
@@ -31,13 +35,10 @@ from app.schemas.snapshot import (
     SnapshotResponse,
 )
 from app.service.dashboard import get_snapshot_dashboard
-from app.service.stats_runner import run_stats_extraction
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/snapshots", tags=["snapshots"])
-
-# Referencias fuertes a los análisis en curso: el event loop solo guarda
-# referencias débiles y una tarea sin referencia puede desaparecer a mitad.
-_background_tasks: set[asyncio.Task] = set()
 
 
 async def _owned_snapshot(snapshot_id: int, db: AsyncSession, user: User) -> Snapshot:
@@ -45,6 +46,26 @@ async def _owned_snapshot(snapshot_id: int, db: AsyncSession, user: User) -> Sna
     if not snapshot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found.")
     return snapshot
+
+
+async def _owned_job(job_id: str, db: AsyncSession, user: User) -> Job:
+    """Solo quien lanzó el job lo ve; para cualquier otro es un 404 (no revela que existe)."""
+    job = await db.scalar(select(Job).where(Job.job_id == job_id, Job.user_id == user.id))
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+    return job
+
+
+async def _enqueue(queue: JobQueue, job: Job) -> None:
+    await publish_job_state(job_status_from_row(job))
+    try:
+        await queue.enqueue_analysis(job.job_id)
+    except Exception as exc:
+        logger.error("job_enqueue_failed", job_id=job.job_id, error=str(exc))
+        await update_job(job.job_id, status="error", error="Could not queue the analysis. Try again.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Analysis queue unavailable."
+        ) from exc
 
 
 @router.get("/player/{player_id}", response_model=Page[SnapshotResponse])
@@ -72,15 +93,21 @@ async def list_snapshots(
     "/",
     response_model=SnapshotJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={429: {"description": "Too many analyses requested"}},
+    responses={429: {"description": "Too many analyses requested"}, 503: {"description": "Queue unavailable"}},
 )
 async def create_snapshot(
     snapshot_in: SnapshotCreate,
     response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    queue: JobQueue = Depends(get_job_queue),
 ):
-    """Lanza el análisis de un período. Devuelve un job_id; el análisis corre en segundo plano."""
+    """Encola el análisis de un período y devuelve su job.
+
+    Idempotente: si ya hay un análisis en marcha del mismo jugador y rango, se
+    devuelve ese job en lugar de lanzar otro. El progreso se sigue por SSE en
+    GET /snapshots/jobs/{job_id}/stream.
+    """
     # Cada análisis cuesta muchas llamadas a Riot: límite estricto por usuario.
     await enforce("snapshots", str(current_user.id), settings.rate_limit_snapshots_per_hour, 3600, response)
 
@@ -88,60 +115,98 @@ async def create_snapshot(
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
 
-    job_id = str(uuid.uuid4())
-    db.add(Job(job_id=job_id, user_id=current_user.id, status="processing"))
-    await db.commit()
+    same_request = select(Job).where(
+        Job.user_id == current_user.id,
+        Job.player_id == player.id,
+        Job.date_from == snapshot_in.date_from,
+        Job.date_to == snapshot_in.date_to,
+        Job.status.in_(ACTIVE_JOB_STATUSES),
+    )
+    if existing := await db.scalar(same_request):
+        return SnapshotJobResponse(job_id=existing.job_id, status=existing.status)
 
-    task = asyncio.create_task(_run_analysis(job_id, player.id, current_user.id, snapshot_in))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return SnapshotJobResponse(job_id=job_id)
+    job = Job(
+        job_id=str(uuid.uuid4()),
+        user_id=current_user.id,
+        player_id=player.id,
+        date_from=snapshot_in.date_from,
+        date_to=snapshot_in.date_to,
+        description=snapshot_in.description,
+        status="queued",
+    )
+    db.add(job)
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Otra petición idéntica ganó la carrera: el índice único parcial lo impide.
+        await db.rollback()
+        if existing := await db.scalar(same_request):
+            return SnapshotJobResponse(job_id=existing.job_id, status=existing.status)
+        raise
 
-
-async def _run_analysis(job_id: str, player_id: int, user_id: int, snapshot_in: SnapshotCreate) -> None:
-    """Tarea en segundo plano con su propia sesión: la de la petición ya se cerró."""
-    async with SessionLocal() as db:
-        try:
-            player = await get_player_by_id(db, player_id, user_id=user_id)
-            if not player:
-                raise ValueError(f"Player {player_id} not found when starting analysis.")
-
-            snapshot_id = await run_stats_extraction(
-                db=db,
-                player=player,
-                date_from=snapshot_in.date_from,
-                date_to=snapshot_in.date_to,
-                description=snapshot_in.description,
-                job_id=job_id,
-            )
-            job = await db.get(Job, job_id)
-            if job:
-                job.status = "done"
-                job.snapshot_id = snapshot_id
-                job.progress = 100
-                await db.commit()
-        except Exception as e:
-            await db.rollback()
-            job = await db.get(Job, job_id)
-            if job:
-                job.status = "error"
-                job.error = str(e)
-                await db.commit()
+    await _enqueue(queue, job)
+    return SnapshotJobResponse(job_id=job.job_id, status="queued")
 
 
 @router.get("/jobs/{job_id}", response_model=SnapshotJobStatus)
 async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Estado de un análisis. Solo lo ve quien lo lanzó; para cualquier otro es un 404."""
-    job = await db.scalar(select(Job).where(Job.job_id == job_id, Job.user_id == current_user.id))
-    if not job:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
-    return SnapshotJobStatus(
-        job_id=job.job_id,
-        status=job.status,
-        progress=job.progress if job.progress is not None else 0,
-        snapshot_id=job.snapshot_id,
-        error=job.error,
+    return job_status_from_row(await _owned_job(job_id, db, current_user))
+
+
+@router.get(
+    "/jobs/{job_id}/stream",
+    response_class=EventSourceResponse,
+    responses={200: {"description": "Eventos `progress`, `done` y `error` con un SnapshotJobStatus en JSON",
+                     "content": {"text/event-stream": {}}}},
+)
+async def stream_job(
+    job_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Progreso en tiempo real por Server-Sent Events.
+
+    SSE y no WebSockets: el flujo es unidireccional, funciona sobre HTTP normal
+    y el navegador se reconecta solo. Al conectar (o reconectar) se envía
+    primero el estado actual.
+    """
+    job = await _owned_job(job_id, db, current_user)
+    return EventSourceResponse(
+        job_event_stream(job_id, job_status_from_row(job), request.is_disconnected),
+        ping=15,
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post(
+    "/jobs/{job_id}/retry",
+    response_model=SnapshotJobStatus,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={409: {"description": "The job has not failed, or an equivalent analysis is running"}},
+)
+async def retry_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    queue: JobQueue = Depends(get_job_queue),
+):
+    """Vuelve a encolar un análisis fallido (por ejemplo, uno interrumpido)."""
+    job = await _owned_job(job_id, db, current_user)
+    if job.status != "error" or job.player_id is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only failed analyses can be retried.")
+
+    job.status, job.error, job.progress, job.finished_at = "queued", None, 0, None
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="An equivalent analysis is already running."
+        ) from exc
+
+    await _enqueue(queue, job)
+    return job_status_from_row(job)
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotResponse)

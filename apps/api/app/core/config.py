@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     dashboard_cache_ttl_seconds: int = 24 * 3600
     ddragon_refresh_hours: int = 6
 
+    # ── Cola de trabajos ───────────────────────────────────────────────────────
+    # "arq": los análisis los ejecuta un worker aparte (producción).
+    # "inline": en el propio proceso de la API (desarrollo sin worker ni Redis real).
+    job_backend: Literal["arq", "inline"] = "arq"
+    worker_max_jobs: int = 2
+    job_timeout_seconds: int = 30 * 60
+    job_heartbeat_seconds: int = 10
+    # Un job en "processing" sin heartbeat durante este tiempo se da por perdido.
+    job_stale_after_seconds: int = 60
+
     # ── Observabilidad ─────────────────────────────────────────────────────────
     log_level: str = "INFO"
     # Sin definir: JSON fuera de desarrollo.
