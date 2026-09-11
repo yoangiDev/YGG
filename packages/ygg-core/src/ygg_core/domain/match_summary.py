@@ -42,7 +42,7 @@ class ParticipantSummary:
     spells: tuple[int, ...]  # los 2 hechizos de invocador
     keystone: int
     secondary_tree: int
-    # Puntuación 0-100 relativa a esta partida (el mejor tiene 100) y su posición 1-10.
+    # Nota 0-100 frente a la media Challenger del rol (70 = esa media) y su posición 1-10.
     score: int = 0
     placement: int = 0
     badge: str | None = None  # "MVP" (mejor del equipo ganador) · "ACE" (mejor del perdedor)

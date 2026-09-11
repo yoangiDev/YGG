@@ -213,11 +213,11 @@ export function matchDetails(matchId: string) {
     };
   });
 
-  // Puntuación simple por KDA y daño: el mejor tiene 100, MVP para el mejor ganador y ACE para el mejor perdedor.
+  // Nota de mentira por KDA y daño entre 35 y 90; MVP para el mejor ganador y ACE para el mejor perdedor.
   const everyone = teams.flatMap((team) => team.participants);
   const raw = everyone.map((p) => p.kda + p.damage_per_min / 200);
   const best = Math.max(...raw);
-  everyone.forEach((p, index) => (p.score = Math.round(((raw[index] ?? 0) / best) * 100)));
+  everyone.forEach((p, index) => (p.score = Math.round(35 + ((raw[index] ?? 0) / best) * 55)));
   [...everyone].sort((a, b) => b.score - a.score).forEach((p, index) => (p.placement = index + 1));
   for (const team of teams) {
     const [top] = [...team.participants].sort((a, b) => a.placement - b.placement);

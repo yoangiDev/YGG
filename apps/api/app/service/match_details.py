@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from ygg_core.domain.match_summary import MATCH_SUMMARY_VERSION, MatchSummary
+from ygg_core.metrics.match_score import score_match
 from ygg_core.riot.match_summary import parse_match_summary
 from ygg_core.riot.routing import region_from_match_id
 
@@ -34,10 +35,14 @@ async def user_can_view_match(db: AsyncSession, match_id: str, user_id: int) -> 
 
 
 async def get_match_summary(db: AsyncSession, match_id: str) -> MatchSummary:
-    """Resumen guardado o, si no existe (o es de otra versión), pedido a Riot y guardado."""
+    """Resumen guardado o, si no existe (o es de otra versión), pedido a Riot y guardado.
+
+    Las notas se recalculan al leer: si cambian las referencias Challenger no hace
+    falta volver a pedir las partidas.
+    """
     stored = await db.get(MatchDetail, match_id)
     if stored is not None and stored.version == MATCH_SUMMARY_VERSION:
-        return MatchSummary.from_dict(stored.summary)
+        return score_match(MatchSummary.from_dict(stored.summary))
     if settings.demo_mode:
         raise MatchDetailsUnavailable("Match details are not available in the demo for this match.")
 

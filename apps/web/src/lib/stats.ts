@@ -70,10 +70,10 @@ export function kdaTone(kda: number): StatTone {
   return "gray";
 }
 
-/** Puntuación de rendimiento 0-100 relativa a la partida (el mejor de los 10 tiene 100). */
+/** Nota 0-100 frente a la media Challenger del rol: 70 es jugar como esa media. */
 export function scoreTone(score: number): StatTone {
-  if (score >= 90) return "gold";
-  if (score >= 75) return "blue";
+  if (score >= 85) return "gold";
+  if (score >= 70) return "blue";
   if (score >= 55) return "green";
   return "gray";
 }

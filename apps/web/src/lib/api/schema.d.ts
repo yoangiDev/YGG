@@ -1031,7 +1031,7 @@ export interface components {
         };
         /**
          * MatchParticipantDetails
-         * @description Un participante de la partida. `score` es relativa a la partida (el mejor tiene 100).
+         * @description Un participante de la partida. `score` es su nota 0-100 frente a la media Challenger del rol (70 = esa media).
          */
         MatchParticipantDetails: {
             /** Puuid */

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from factories import DURATION, GAME_CREATION_MS, MATCH_ID, make_match, puuid
 from ygg_core.domain.match_summary import MatchSummary
+from ygg_core.metrics.match_score import score_match
 from ygg_core.riot.match_summary import parse_match_summary
 
 
@@ -33,16 +34,26 @@ def test_participant_build_and_stats():
     assert (top.keystone, top.secondary_tree) == (8112, 8300)
 
 
-def test_scores_are_relative_to_the_match_with_one_mvp_and_one_ace():
+def test_ranks_players_with_one_mvp_and_one_ace():
     participants = parse_match_summary(make_match()).participants()
 
-    assert max(p.score for p in participants) == 100
+    assert all(0 <= p.score <= 100 for p in participants)
     assert sorted(p.placement for p in participants) == list(range(1, 11))
     mvp = [p for p in participants if p.badge == "MVP"]
     ace = [p for p in participants if p.badge == "ACE"]
     assert len(mvp) == 1 and mvp[0].win
     assert len(ace) == 1 and not ace[0].win
     assert min(p.placement for p in participants if p.win) == mvp[0].placement
+
+
+def test_scores_are_recomputed_from_a_stored_summary():
+    summary = parse_match_summary(make_match())
+    stale = summary.to_dict()
+    for team in stale["teams"]:
+        for participant in team["participants"]:
+            participant.update(score=0, placement=0, badge=None)
+
+    assert score_match(MatchSummary.from_dict(stale)) == summary
 
 
 def test_round_trips_through_json():

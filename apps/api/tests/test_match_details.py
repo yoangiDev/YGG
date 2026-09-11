@@ -3,9 +3,11 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import update
 
 from app.core.config import settings
 from app.crud.participants import upsert_participants
+from app.db.models.match_detail import MatchDetail
 from app.db.models.user import User
 from tests.helpers import create_player, make_stats, unique
 
@@ -91,6 +93,28 @@ async def test_details_are_fetched_once_and_then_served_from_the_database(client
     assert second.json() == body
     riot.fetch_match.assert_awaited_once()
     factory.assert_called_once_with("euw1")  # la región sale del prefijo del match id
+
+
+async def test_stored_details_are_scored_again_when_read(client, auth_headers, owned_match, db):
+    """Cambiar las referencias Challenger no obliga a volver a pedir la partida a Riot."""
+    player, match_id = owned_match
+    with patch("app.service.match_details.riot_client", return_value=fake_riot(match_payload(match_id, player.puuid))), patch(
+        "app.service.match_details.create_secure_session"
+    ):
+        body = client.get(f"/matches/{match_id}/details", headers=auth_headers).json()
+
+    stale = (await db.get(MatchDetail, match_id)).summary
+    for team in stale["teams"]:
+        for participant in team["participants"]:
+            participant.update(score=0, placement=0, badge=None)
+    await db.execute(update(MatchDetail).where(MatchDetail.match_id == match_id).values(summary=stale))
+    await db.commit()
+
+    with patch("app.service.match_details.riot_client") as factory:
+        again = client.get(f"/matches/{match_id}/details", headers=auth_headers)
+
+    assert again.json() == body
+    factory.assert_not_called()
 
 
 async def test_matches_of_other_users_are_not_available(client, auth_headers, db):

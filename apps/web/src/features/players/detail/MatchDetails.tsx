@@ -123,7 +123,7 @@ function ParticipantRow({ participant, maxDamage, tracked }: { participant: Part
 
       <p
         className={cn("text-right text-[15px] font-black tabular-nums", toneText[scoreTone(participant.score)])}
-        title="Performance score in this match (best player = 100)"
+        title="Score vs. the Challenger average for this role (70 = Challenger average)"
       >
         {participant.score}
       </p>
