@@ -14,31 +14,43 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  /** Rótulo en verde sobre el título (por ejemplo, «New analysis»). */
+  kicker?: string;
   children: ReactNode;
   className?: string;
 }
 
-export function Dialog({ open, onOpenChange, title, description, children, className }: DialogProps) {
+/** Modal recto con pestaña ácida; en móvil se abre como hoja inferior (DESIGN.md §8.5). */
+export function Dialog({ open, onOpenChange, title, description, kicker, children, className }: DialogProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[110] bg-[rgba(5,7,7,0.72)] backdrop-blur-[2px] data-[state=open]:animate-[fade-in_.2s_ease]" />
         <DialogPrimitive.Content
           className={cn(
-            "fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
-            "rounded-2xl border border-primary/25 bg-surface p-6 shadow-2xl focus:outline-none",
+            "acid-tab-lg fixed top-1/2 left-1/2 z-[120] w-[min(92vw,40rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
+            "max-h-[min(92dvh,720px)] border border-acid/28 p-7 shadow-popover focus:outline-none",
+            "bg-[linear-gradient(135deg,rgba(200,245,63,0.05),transparent_40%),#101412] data-[state=open]:animate-rise",
+            "max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:w-full max-sm:translate-x-0 max-sm:translate-y-0",
+            "max-sm:border-x-0 max-sm:border-b-0 max-sm:px-5 max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]",
             className,
           )}
           {...(description ? {} : { "aria-describedby": undefined })}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <DialogPrimitive.Title className="text-base font-bold text-fg">{title}</DialogPrimitive.Title>
+          <div className="mb-6 flex items-start justify-between gap-6">
+            <div className="min-w-0">
+              {kicker && <p className="eyebrow mb-3 text-[10px] tracking-[0.18em]">{kicker}</p>}
+              <DialogPrimitive.Title className="headline text-[26px] text-text sm:text-[32px]">{title}</DialogPrimitive.Title>
               {description && (
-                <DialogPrimitive.Description className="mt-1 text-sm text-muted">{description}</DialogPrimitive.Description>
+                <DialogPrimitive.Description className="mt-3 text-sm leading-relaxed text-muted">
+                  {description}
+                </DialogPrimitive.Description>
               )}
             </div>
-            <DialogPrimitive.Close className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-fg" aria-label="Close">
+            <DialogPrimitive.Close
+              className="grid size-9 shrink-0 cursor-pointer place-items-center border border-line text-soft transition-colors hover:border-acid hover:text-acid"
+              aria-label="Close"
+            >
               <X className="size-4" aria-hidden="true" />
             </DialogPrimitive.Close>
           </div>
@@ -60,10 +72,10 @@ export function Tooltip({ content, children }: { content: ReactNode; children: R
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           sideOffset={6}
-          className="z-50 max-w-72 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-fg shadow-lg"
+          className="z-[130] max-w-72 border border-line bg-popover px-2.5 py-1.5 text-xs font-medium text-soft shadow-dropdown"
         >
           {content}
-          <TooltipPrimitive.Arrow className="fill-surface-2" />
+          <TooltipPrimitive.Arrow className="fill-popover" />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
@@ -76,20 +88,17 @@ export const Tabs = TabsPrimitive.Root;
 export const TabsContent = TabsPrimitive.Content;
 
 export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrimitive.List>) {
-  return (
-    <TabsPrimitive.List
-      className={cn("inline-flex gap-1 rounded-xl border border-primary/15 bg-[#0f0d18] p-1", className)}
-      {...props}
-    />
-  );
+  return <TabsPrimitive.List className={cn("flex gap-7 overflow-x-auto border-b border-line", className)} {...props} />;
 }
 
+/** Pestaña en mayúsculas con subrayado ácido que crece de izquierda a derecha. */
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold tracking-wider text-muted uppercase transition",
-        "hover:text-fg data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#8b48d4] data-[state=active]:to-[#6b2fa0] data-[state=active]:text-white",
+        "relative -mb-px inline-flex cursor-pointer items-center gap-2 pb-3.5 text-[11px] font-black tracking-[0.14em] whitespace-nowrap text-subtle uppercase transition-colors",
+        "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:scale-x-0 after:bg-acid after:transition-transform after:duration-300",
+        "hover:text-text data-[state=active]:text-acid data-[state=active]:after:scale-x-100",
         className,
       )}
       {...props}
@@ -106,9 +115,9 @@ export function DropdownMenuContent({ className, ...props }: ComponentProps<type
   return (
     <DropdownPrimitive.Portal>
       <DropdownPrimitive.Content
-        sideOffset={6}
+        sideOffset={8}
         align="end"
-        className={cn("z-50 min-w-48 rounded-lg border border-border bg-surface-2 p-1 shadow-xl", className)}
+        className={cn("z-[130] min-w-56 border border-line bg-[#0c0f10] p-1 shadow-dropdown data-[state=open]:animate-rise", className)}
         {...props}
       />
     </DropdownPrimitive.Portal>
@@ -119,8 +128,8 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return (
     <DropdownPrimitive.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-fg outline-none select-none",
-        "data-[highlighted]:bg-primary/15 data-[disabled]:opacity-50",
+        "flex cursor-pointer items-center gap-2.5 px-3 py-2.5 text-[13px] font-bold text-soft outline-none select-none",
+        "data-[disabled]:opacity-50 data-[highlighted]:bg-acid/[0.08] data-[highlighted]:text-acid",
         className,
       )}
       {...props}
@@ -128,4 +137,4 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   );
 }
 
-export const DropdownMenuSeparator = () => <DropdownPrimitive.Separator className="my-1 h-px bg-border" />;
+export const DropdownMenuSeparator = () => <DropdownPrimitive.Separator className="my-1 h-px bg-line" />;

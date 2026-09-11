@@ -2,19 +2,25 @@ import type { ButtonHTMLAttributes, Ref } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { ArrowIcon, type ArrowDirection } from "./ArrowIcon";
 import { Spinner } from "./Spinner";
 
+/*
+ * Botones rectos, en mayúsculas y a peso 900 (DESIGN.md §6). Como mucho un
+ * primario por bloque; el hover con desplazamiento solo actúa con ratón
+ * (la variante hover de Tailwind ya va dentro de `@media (hover: hover)`).
+ */
 const variants = {
-  primary:
-    "bg-gradient-to-br from-primary to-primary-dim text-white shadow-[0_0_14px_hsl(270_70%_62%/0.25)] hover:brightness-110",
-  outline: "border border-primary/60 text-primary-light hover:bg-primary/10",
-  ghost: "text-muted hover:bg-surface-2 hover:text-fg",
-  danger: "border border-stat-red/50 text-stat-red hover:bg-stat-red/10",
+  primary: "border-acid bg-acid text-on-acid hover:-translate-y-0.5 hover:border-acid-hover hover:bg-acid-hover hover:shadow-glow",
+  outline: "border-line-button bg-transparent text-text hover:border-acid hover:text-acid",
+  ghost: "border-transparent bg-transparent text-muted hover:bg-white/[0.04] hover:text-text",
+  danger: "border-danger/40 bg-transparent text-danger hover:border-danger hover:bg-danger/[0.06]",
 } as const;
 
 const sizes = {
-  sm: "h-8 px-3 text-xs",
-  md: "h-10 px-4 text-sm",
+  sm: "h-9 gap-2 px-3.5 text-[11px]",
+  md: "h-[42px] gap-2.5 px-5 text-[12px]",
+  lg: "h-[52px] gap-3 px-6 text-[12px]",
   icon: "size-9 p-0",
 } as const;
 
@@ -28,8 +34,9 @@ export function buttonClasses({
   className,
 }: { variant?: ButtonVariant; size?: ButtonSize; className?: string | undefined } = {}): string {
   return cn(
-    "inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg font-semibold tracking-wide whitespace-nowrap transition",
-    "disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex cursor-pointer items-center justify-center border font-black tracking-[0.045em] whitespace-nowrap uppercase",
+    "transition-[translate,background-color,border-color,color,box-shadow] duration-200",
+    "disabled:pointer-events-none disabled:opacity-45",
     variants[variant],
     sizes[size],
     className,
@@ -40,6 +47,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
+  /** Flecha de la marca tras el texto. `true` equivale a "ne" (↗). */
+  arrow?: boolean | ArrowDirection;
   ref?: Ref<HTMLButtonElement>;
 }
 
@@ -47,6 +56,7 @@ export function Button({
   variant = "primary",
   size = "md",
   loading = false,
+  arrow = false,
   className,
   children,
   disabled,
@@ -61,8 +71,9 @@ export function Button({
       className={buttonClasses({ variant, size, className })}
       {...props}
     >
-      {loading && <Spinner className="size-4" label="Working" />}
+      {loading && <Spinner className="size-3.5" label="Working" />}
       {children}
+      {arrow && !loading && <ArrowIcon direction={arrow === true ? "ne" : arrow} />}
     </button>
   );
 }

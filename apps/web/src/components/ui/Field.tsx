@@ -2,12 +2,17 @@ import { useId, type InputHTMLAttributes, type ReactNode, type Ref, type SelectH
 
 import { cn } from "@/lib/cn";
 
+/*
+ * Controles de formulario (DESIGN.md §8.4): rectos, fondo casi negro y borde
+ * ácido al enfocar. En móvil suben a 16px para que iOS no haga zoom.
+ */
 const control =
-  "w-full rounded-lg border border-border bg-surface-2 px-3 text-sm text-fg placeholder:text-muted/70 " +
-  "transition focus:border-primary focus:outline-none aria-[invalid=true]:border-stat-red";
+  "w-full border border-line-strong bg-field px-3.5 text-sm font-medium text-text placeholder:text-[#79817b] " +
+  "transition-colors focus:border-acid focus:outline focus:outline-1 focus:outline-acid " +
+  "aria-[invalid=true]:border-danger disabled:opacity-50 max-sm:text-base";
 
 export function Input({ className, ref, ...props }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
-  return <input ref={ref} className={cn(control, "h-10", className)} {...props} />;
+  return <input ref={ref} className={cn(control, "h-11 max-sm:h-12", className)} {...props} />;
 }
 
 export function Textarea({
@@ -15,7 +20,7 @@ export function Textarea({
   ref,
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
-  return <textarea ref={ref} className={cn(control, "min-h-20 py-2", className)} {...props} />;
+  return <textarea ref={ref} className={cn(control, "min-h-24 py-3 leading-relaxed", className)} {...props} />;
 }
 
 export function Select({
@@ -25,7 +30,7 @@ export function Select({
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & { ref?: Ref<HTMLSelectElement> }) {
   return (
-    <select ref={ref} className={cn(control, "h-10", className)} {...props}>
+    <select ref={ref} className={cn(control, "select-chevron h-11 cursor-pointer max-sm:h-12", className)} {...props}>
       {children}
     </select>
   );
@@ -43,13 +48,13 @@ export function Field({ label, error, hint, children }: FieldProps) {
   const id = useId();
   const messageId = `${id}-message`;
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
+    <div className="flex flex-col gap-2">
+      <label htmlFor={id} className="text-[11px] font-extrabold tracking-[0.06em] text-[#d5ddd7] uppercase">
         {label}
       </label>
       {children({ id, "aria-invalid": Boolean(error), "aria-describedby": error || hint ? messageId : undefined })}
       {(error ?? hint) && (
-        <p id={messageId} className={cn("text-xs", error ? "text-stat-red" : "text-muted")}>
+        <p id={messageId} className={cn(error ? "text-[13px] text-danger" : "text-xs text-subtle")}>
           {error ?? hint}
         </p>
       )}

@@ -1,43 +1,58 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: "DM Sans";
-  src: url("/fonts/dm-sans-latin.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "DM Sans";
-  src: url("/fonts/dm-sans-latin-700.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* Paleta Hextech: los valores HSL del prototipo original, ahora como tokens de Tailwind. */
+/*
+ * Sistema visual de YGG (basado en DESIGN.md): oscuro, esquinas rectas y un único
+ * acento de interfaz, el verde ácido. Los datos del dashboard conservan su propia
+ * paleta semántica (stat-*, rank-*), que no compite con el acento.
+ */
 @theme {
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Geist Variable", Arial, Helvetica, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 
-  --color-bg: hsl(252 28% 8%);
-  --color-surface: hsl(252 25% 11%);
-  --color-surface-2: hsl(252 25% 14%);
-  --color-primary: hsl(270 70% 62%);
-  --color-primary-light: hsl(270 80% 78%);
-  --color-primary-dim: hsl(270 50% 42%);
-  --color-border: hsl(270 30% 19%);
-  /* Más claro que el original (#6b6578) para cumplir contraste AA sobre el fondo. */
-  --color-muted: #a39cb3;
-  --color-fg: #e8e0f5;
+  /* Sin radios: todo recto. `rounded-full` (puntos y avatares) sigue disponible. */
+  --radius-*: initial;
 
-  /* Estado semántico de las métricas (docs/FRONTEND_COLOR_GUIDE.md) */
+  /* ── Superficies y texto ─────────────────────────────────────────────────── */
+  --color-ink: #080a0b;
+  --color-ink-soft: #101315;
+  --color-panel: #15191b;
+  --color-panel-light: #1b2022;
+  --color-popover: #101412;
+  --color-field: #0c0f0e;
+  --color-line: rgba(255, 255, 255, 0.11);
+  --color-line-strong: #2c3430;
+  --color-line-button: #4c544d;
+  --color-text: #f4f6f1;
+  --color-soft: #c9ccca;
+  --color-muted: #9ca39f;
+  --color-subtle: #7f8781;
+  --color-danger: #ffb4b4;
+
+  /* ── Acento de interfaz ──────────────────────────────────────────────────── */
+  --color-acid: #c8f53f;
+  --color-acid-hover: #d5ff55;
+  --color-acid-dark: #9dbf31;
+  --color-acid-link: #8ea92f;
+  --color-on-acid: #0a0c08;
+
+  /* ── Alias del tema anterior: se retiran al rehacer cada pantalla ────────── */
+  --color-bg: #080a0b;
+  --color-surface: #15191b;
+  --color-surface-2: #1b2022;
+  --color-border: rgba(255, 255, 255, 0.11);
+  --color-fg: #f4f6f1;
+  --color-primary: #c8f53f;
+  --color-primary-light: #c8f53f;
+  --color-primary-dim: #9dbf31;
+
+  /* ── Datos: estado semántico de las métricas ─────────────────────────────── */
   --color-stat-gold: #ff9f19;
   --color-stat-blue: #38bdf8;
   --color-stat-green: #4ade80;
   --color-stat-gray: #94a3b8;
   --color-stat-red: #f87171;
 
+  /* ── Datos: rangos ───────────────────────────────────────────────────────── */
   --color-rank-iron: #8a8a9a;
   --color-rank-bronze: #c0693a;
   --color-rank-silver: #7a8fa8;
@@ -49,36 +64,84 @@
   --color-rank-grandmaster: #e04030;
   --color-rank-challenger: #f0d020;
 
+  /* ── Sombras ─────────────────────────────────────────────────────────────── */
+  --shadow-glow: 0 12px 34px rgba(200, 245, 63, 0.18);
+  --shadow-float: 0 30px 80px rgba(0, 0, 0, 0.45);
+  --shadow-float-hover: 0 38px 100px rgba(0, 0, 0, 0.58), 0 0 45px rgba(200, 245, 63, 0.06);
+  --shadow-popover: 0 24px 75px rgba(0, 0, 0, 0.52);
+  --shadow-dropdown: 0 18px 44px rgba(0, 0, 0, 0.55);
+
+  /* ── Movimiento ──────────────────────────────────────────────────────────── */
+  --ease-snap: cubic-bezier(0.2, 0.75, 0.2, 1);
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-pulse-dot: pulse-dot 2s ease-out infinite;
+  --animate-rise: rise 0.42s var(--ease-soft) both;
 
   @keyframes shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
+  }
+
+  @keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 rgba(200, 245, 63, 0.35); }
+    70% { box-shadow: 0 0 0 7px rgba(200, 245, 63, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(200, 245, 63, 0); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
   }
 }
 
 @layer base {
   html {
     color-scheme: dark;
+    background: var(--color-ink);
+    scrollbar-color: rgba(200, 245, 63, 0.35) #111516;
   }
 
   body {
     min-height: 100dvh;
-    background-color: var(--color-bg);
-    background-image: radial-gradient(60rem 40rem at 85% -10%, hsl(270 70% 62% / 0.07), transparent 70%);
+    background-color: var(--color-ink);
+    background-image:
+      radial-gradient(circle at 78% -6%, rgba(200, 245, 63, 0.055), transparent 32%),
+      repeating-linear-gradient(115deg, transparent 0 160px, rgba(255, 255, 255, 0.018) 161px, transparent 162px),
+      linear-gradient(115deg, #090b0c 0%, #0d1112 55%, #0a0c0c 100%);
     background-attachment: fixed;
-    color: var(--color-fg);
+    color: var(--color-text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-primary-light);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-acid);
+    outline-offset: 4px;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-width: 1px;
+    outline-offset: 0;
   }
 
   ::selection {
-    background: hsl(270 70% 62% / 0.35);
+    background: rgba(200, 245, 63, 0.28);
+    color: var(--color-text);
+  }
+
+  option {
+    background: var(--color-field);
+    color: var(--color-text);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -91,4 +154,113 @@
       scroll-behavior: auto !important;
     }
   }
+}
+
+/* ── Utilidades del sistema ───────────────────────────────────────────────── */
+
+/* Titular: peso máximo, interletrado muy negativo e interlineado por debajo de 1. */
+@utility headline {
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+/* Rótulo de sección en verde, con hueco para un punto vivo delante. */
+@utility eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-acid);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+}
+
+/* Microtexto: labels, cabeceras de tabla, metadatos. */
+@utility microtext {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Pestaña ácida: la firma visual de las tarjetas destacadas. */
+@utility acid-tab {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 75px;
+    height: 2px;
+    background: var(--color-acid);
+    pointer-events: none;
+  }
+}
+
+@utility acid-tab-lg {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 78px;
+    height: 3px;
+    background: var(--color-acid);
+    pointer-events: none;
+  }
+}
+
+/* Tarjeta destacada: borde con acento y degradado oscuro. */
+@utility card-featured {
+  border-color: rgba(200, 245, 63, 0.22);
+  background: linear-gradient(145deg, rgba(27, 33, 31, 0.93), rgba(12, 15, 15, 0.96));
+}
+
+/* Punto vivo: estado activo o en curso. */
+@utility live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--color-acid);
+  animation: var(--animate-pulse-dot);
+}
+
+/* Separador en rombo. */
+@utility diamond {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  background: var(--color-acid);
+  transform: rotate(45deg);
+}
+
+/* Chevron del select: dos triángulos ácidos, sin imagen. */
+@utility select-chevron {
+  appearance: none;
+  padding-right: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-acid) 50%),
+    linear-gradient(135deg, var(--color-acid) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 55%,
+    calc(100% - 13px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Cuadrícula técnica de fondo. */
+@utility tech-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 76px 76px;
 }

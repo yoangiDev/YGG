@@ -1,3 +1,4 @@
+import { ArrowIcon } from "./ArrowIcon";
 import { Button } from "./Button";
 
 export function Pager({
@@ -16,18 +17,16 @@ export function Pager({
   const to = Math.min(total, (page + 1) * pageSize);
 
   return (
-    <nav
-      aria-label="Pagination"
-      className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-xs text-muted"
-    >
-      <span>
+    <nav aria-label="Pagination" className="flex items-center justify-between gap-3 border-t border-line px-5 py-3.5">
+      <span className="microtext text-subtle tabular-nums">
         {from}–{to} of {total}
       </span>
-      <div className="flex gap-1">
-        <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
+          <ArrowIcon direction="left" />
           Previous
         </Button>
-        <Button variant="ghost" size="sm" disabled={page + 1 >= pages} onClick={() => onPageChange(page + 1)}>
+        <Button variant="outline" size="sm" arrow="right" disabled={page + 1 >= pages} onClick={() => onPageChange(page + 1)}>
           Next
         </Button>
       </div>

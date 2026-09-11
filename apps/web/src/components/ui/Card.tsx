@@ -2,8 +2,21 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
-export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  return <section className={cn("rounded-xl border border-border bg-surface/95", className)} {...props} />;
+/**
+ * Tarjeta recta sobre el fondo oscuro. `featured` añade el borde con acento, el
+ * degradado y la pestaña ácida (DESIGN.md §8.3): úsalo solo en lo destacado.
+ */
+export function Card({ className, featured = false, ...props }: HTMLAttributes<HTMLElement> & { featured?: boolean }) {
+  return (
+    <section
+      className={cn(
+        "border border-line bg-panel/85",
+        featured && "card-featured acid-tab shadow-float",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardHeader({
@@ -18,10 +31,13 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("flex items-start justify-between gap-4 border-b border-border/60 px-5 py-4", className)}>
+    <header className={cn("flex items-start justify-between gap-4 border-b border-line px-5 py-4", className)}>
       <div className="min-w-0">
-        <h2 className="text-sm font-bold tracking-[0.14em] text-primary-light uppercase">{title}</h2>
-        {description && <p className="mt-1 text-xs text-muted">{description}</p>}
+        <h2 className="flex items-center gap-2.5 text-[12px] font-black tracking-[0.16em] text-text uppercase">
+          <span className="diamond" aria-hidden="true" />
+          {title}
+        </h2>
+        {description && <p className="mt-1.5 text-xs text-subtle">{description}</p>}
       </div>
       {action}
     </header>
@@ -33,7 +49,7 @@ export function Skeleton({ className }: { className?: string }) {
     <div
       aria-hidden="true"
       className={cn(
-        "animate-shimmer rounded-md bg-[linear-gradient(90deg,var(--color-surface-2)_25%,hsl(252_25%_18%)_50%,var(--color-surface-2)_75%)] bg-[length:200%_100%]",
+        "animate-shimmer bg-[linear-gradient(90deg,#15191b_25%,#1f2527_50%,#15191b_75%)] bg-[length:200%_100%]",
         className,
       )}
     />
@@ -51,7 +67,7 @@ export function ProgressBar({
   label: string;
   className?: string;
   barClassName?: string;
-  /** Color sólido de la barra (por ejemplo, el del rango). Sustituye al degradado. */
+  /** Color sólido de la barra (por ejemplo, el del rango). Por defecto, el acento. */
   color?: string;
 }) {
   const clamped = Math.min(100, Math.max(0, value));
@@ -62,10 +78,10 @@ export function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(clamped)}
-      className={cn("h-1.5 overflow-hidden rounded-full bg-white/10", className)}
+      className={cn("h-1 overflow-hidden bg-white/10", className)}
     >
       <div
-        className={cn("h-full rounded-full bg-gradient-to-r from-primary to-primary-light transition-[width]", barClassName)}
+        className={cn("h-full bg-acid transition-[width] duration-500 ease-snap", barClassName)}
         style={color ? { width: `${clamped}%`, background: color } : { width: `${clamped}%` }}
       />
     </div>
