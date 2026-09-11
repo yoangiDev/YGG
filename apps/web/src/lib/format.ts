@@ -5,6 +5,12 @@ export function formatNumber(value: number, digits = 1): string {
   return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits }).format(value);
 }
 
+/** 27 400 → "27.4K": para cifras grandes en columnas estrechas. */
+export function formatCompact(value: number): string {
+  // Mayúsculas: según la versión de ICU, en-GB devuelve "27.4k" o "27.4K".
+  return new Intl.NumberFormat(LOCALE, { notation: "compact", maximumFractionDigits: 1 }).format(value).toUpperCase();
+}
+
 /** +150 / −35 / 0: los diferenciales se leen mejor con signo explícito. */
 export function formatSigned(value: number, digits = 0): string {
   const magnitude = formatNumber(Math.abs(value), digits);

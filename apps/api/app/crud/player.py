@@ -132,3 +132,8 @@ async def delete_player(db: AsyncSession, player: Player) -> None:
 async def role_summary(db: AsyncSession, puuid: str) -> list[RowMapping]:
     result = await db.execute(load("player_role_summary"), {"puuid": puuid})
     return list(result.mappings())
+
+
+async def champion_stats(db: AsyncSession, player_id: int, limit: int = 10) -> list[RowMapping]:
+    result = await db.execute(load("player_champion_stats"), {"player_id": player_id, "limit": limit})
+    return list(result.mappings())

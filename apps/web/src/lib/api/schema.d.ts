@@ -257,10 +257,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Live Matches
-         * @description Últimas N partidas del jugador (caché de 1 h), sin filtro de rol ni dependencia de snapshots.
+         * List Player Matches
+         * @description Historial del jugador por páginas, de la partida más reciente a la más antigua.
+         *
+         *     La primera página sale de la base de datos si se sincronizó hace menos de una
+         *     hora; las demás siguen la paginación de Riot reutilizando lo ya guardado. Si
+         *     Riot falla, se sirve lo guardado para esa página.
          */
-        get: operations["matches_list_live_matches"];
+        get: operations["matches_list_player_matches"];
         put?: never;
         post?: never;
         delete?: never;
@@ -309,7 +313,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/matches/player/{player_id}/most-played": {
+    "/matches/player/{player_id}/champions": {
         parameters: {
             query?: never;
             header?: never;
@@ -317,10 +321,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Most Played Champions
-         * @description Top 3 campeones en las últimas partidas del jugador (desde el historial en BD).
+         * Get Champion Stats
+         * @description Rendimiento por campeón sobre todas las partidas guardadas del jugador (historial y análisis).
          */
-        get: operations["matches_get_most_played_champions"];
+        get: operations["matches_get_champion_stats"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1213,17 +1217,6 @@ export interface components {
             /** Status */
             status: string;
         };
-        /** MostPlayedChampionResponse */
-        MostPlayedChampionResponse: {
-            /** Champion Name */
-            champion_name: string;
-            /** Games Played */
-            games_played: number;
-            /** Win Rate */
-            win_rate: number;
-            /** Icon Url */
-            icon_url: string;
-        };
         /** Page[AdminPlayerOut] */
         Page_AdminPlayerOut_: {
             /** Items */
@@ -1278,6 +1271,39 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /**
+         * PlayerChampionStats
+         * @description Rendimiento de un jugador con un campeón (consulta SQL player_champion_stats).
+         *
+         *     kills, deaths, assists y vision_score son medias por partida; kda y los ratios
+         *     por minuto se calculan sobre el total de sus partidas con ese campeón.
+         */
+        PlayerChampionStats: {
+            /** Champion Name */
+            champion_name: string;
+            /** Games */
+            games: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+            /** Win Rate */
+            win_rate: number;
+            /** Kills */
+            kills: number;
+            /** Deaths */
+            deaths: number;
+            /** Assists */
+            assists: number;
+            /** Kda */
+            kda: number;
+            /** Cs Per Min */
+            cs_per_min: number;
+            /** Dmg Per Min */
+            dmg_per_min: number;
+            /** Vision Score */
+            vision_score: number;
         };
         /**
          * PlayerCreate
@@ -2315,13 +2341,15 @@ export interface operations {
             };
         };
     };
-    matches_list_live_matches: {
+    matches_list_player_matches: {
         parameters: {
             query?: {
                 limit?: number;
-                /** @description Force full fetch from Riot API */
+                /** @description Matches to skip, newest first */
+                offset?: number;
+                /** @description Force a fresh page from Riot API */
                 live?: boolean;
-                /** @description Fetch new matches from Riot until stored history is reached */
+                /** @description Same as live (kept for older clients) */
                 sync?: boolean;
             };
             header?: never;
@@ -2350,7 +2378,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Riot API unavailable and nothing cached */
+            /** @description Riot API unavailable and nothing stored for that page */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2426,9 +2454,11 @@ export interface operations {
             };
         };
     };
-    matches_get_most_played_champions: {
+    matches_get_champion_stats: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 player_id: number;
@@ -2443,7 +2473,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MostPlayedChampionResponse"][];
+                    "application/json": components["schemas"]["PlayerChampionStats"][];
                 };
             };
             /** @description Validation Error */

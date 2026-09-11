@@ -240,7 +240,29 @@ export const roleSummary = [
   { role: "SUPPORT", games: 6, win_rate: 33.3, kda: 2.1, cs_per_min: 1.2, gold_diff_14: null, deaths: 5.2 },
 ];
 
-export const mostPlayed = dashboards[42]?.played_champions ?? [];
+const champion = (champion_name: string, wins: number, losses: number, kda: number, cs: number, dpm: number, vision: number) => ({
+  champion_name,
+  games: wins + losses,
+  wins,
+  losses,
+  win_rate: Math.round((wins / (wins + losses)) * 1000) / 10,
+  kills: 6.1,
+  deaths: 3.2,
+  assists: 7.4,
+  kda,
+  cs_per_min: cs,
+  dmg_per_min: dpm,
+  vision_score: vision,
+});
+
+export const championStats = [
+  champion("Ahri", 21, 13, 4.24, 8.3, 812, 24.6),
+  champion("Orianna", 12, 9, 3.61, 8.1, 745, 26.1),
+  champion("Syndra", 11, 5, 3.92, 7.9, 901, 21.8),
+  champion("Azir", 6, 7, 2.87, 8.6, 688, 23.4),
+  champion("Viktor", 7, 4, 3.35, 8.0, 790, 22.0),
+  champion("Taliyah", 3, 4, 2.54, 7.2, 655, 25.9),
+];
 
 export const cutoffs = (region: string) => ({
   region,

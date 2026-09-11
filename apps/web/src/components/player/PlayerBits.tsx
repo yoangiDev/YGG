@@ -211,7 +211,7 @@ export function WinRate({ wins, losses, compact = false }: { wins: number; losse
         </span>
       </p>
       {!compact && (
-        <div className="mt-1.5 flex h-1 w-28 overflow-hidden rounded-full bg-stat-red/35" aria-hidden="true">
+        <div className="mt-1.5 flex h-1 w-28 overflow-hidden bg-stat-red/35" aria-hidden="true">
           <div className={toneBackground[tone]} style={{ width: `${winRate}%` }} />
         </div>
       )}

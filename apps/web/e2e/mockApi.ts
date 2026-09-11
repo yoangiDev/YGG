@@ -65,10 +65,12 @@ export async function mockApi(target: Page, { admin = false, allowCdn = false, s
         return json(route, data.player);
       case "GET /players/1/summary":
         return json(route, data.roleSummary);
-      case "GET /matches/player/1":
-        return json(route, data.matches.slice(0, Number(url.searchParams.get("limit") ?? 10)));
-      case "GET /matches/player/1/most-played":
-        return json(route, data.mostPlayed);
+      case "GET /matches/player/1": {
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        return json(route, data.matches.slice(offset, offset + Number(url.searchParams.get("limit") ?? 20)));
+      }
+      case "GET /matches/player/1/champions":
+        return json(route, data.championStats);
       case "GET /snapshots/player/1":
         return json(route, page(data.snapshots, url));
       case "POST /snapshots/":

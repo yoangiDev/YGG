@@ -1,20 +1,17 @@
 import logging
-from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
-from app.crud.player import get_player_by_id
+from app.crud.player import champion_stats, get_player_by_id
 from app.crud.snapshot import get_matches_page, get_snapshot_by_id, snapshot_summary
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.common import Page, PageParams
-from app.schemas.match import MatchResponse, MostPlayedChampionResponse, SnapshotStatsResponse
-from app.service.ddragon_client import FALLBACK_VERSION, DDragonClient, get_ddragon_client
-from app.service.match_history import get_history_from_cache, is_history_fresh, update_history_cache
-from app.service.riot import create_secure_session, player_ref, riot_client
+from app.schemas.match import MatchResponse, PlayerChampionStats, SnapshotStatsResponse
+from app.service.match_history import fetch_history_page, get_history_from_cache, is_history_fresh
 
 logger = logging.getLogger(__name__)
 
@@ -29,47 +26,46 @@ def _to_responses(matches) -> list[MatchResponse]:
 @router.get(
     "/player/{player_id}",
     response_model=list[MatchResponse],
-    responses={503: {"description": "Riot API unavailable and nothing cached"}},
+    responses={503: {"description": "Riot API unavailable and nothing stored for that page"}},
 )
-async def list_live_matches(
+async def list_player_matches(
     player_id: int,
     limit: int = Query(default=20, ge=1, le=100),
-    live: bool = Query(default=False, description="Force full fetch from Riot API"),
-    sync: bool = Query(default=False, description="Fetch new matches from Riot until stored history is reached"),
+    offset: int = Query(default=0, ge=0, le=1000, description="Matches to skip, newest first"),
+    live: bool = Query(default=False, description="Force a fresh page from Riot API"),
+    sync: bool = Query(default=False, description="Same as live (kept for older clients)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Últimas N partidas del jugador (caché de 1 h), sin filtro de rol ni dependencia de snapshots."""
+    """Historial del jugador por páginas, de la partida más reciente a la más antigua.
+
+    La primera página sale de la base de datos si se sincronizó hace menos de una
+    hora; las demás siguen la paginación de Riot reutilizando lo ya guardado. Si
+    Riot falla, se sirve lo guardado para esa página.
+    """
     player = await get_player_by_id(db, player_id, user_id=current_user.id)
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
 
-    # En la demo el historial guardado es la única fuente: nunca se consulta a Riot.
-    if not (live or sync) and (settings.demo_mode or is_history_fresh(player)):
-        cached = await get_history_from_cache(db, player_id, limit=limit)
-        if cached or settings.demo_mode:
-            return _to_responses(cached)
+    # En la demo la base de datos es la única fuente: nunca se consulta a Riot.
+    from_cache = settings.demo_mode or (offset == 0 and not (live or sync) and is_history_fresh(player))
+    if from_cache:
+        return _to_responses(await get_history_from_cache(db, player_id, limit=limit, offset=offset))
 
+    name = player.game_name  # tras un rollback los atributos del ORM caducan
     try:
-        client = riot_client(player.region)
-        async with create_secure_session() as session:
-            participants = await client.fetch_participants(
-                session, player_ref(player), max_matches=limit, role_filter=None, include_timeline=False
-            )
-        if participants:
-            await update_history_cache(db, player, participants)
-            return _to_responses(participants)
+        return _to_responses(await fetch_history_page(db, player, offset=offset, limit=limit))
     except Exception as exc:
         await db.rollback()
-        logger.warning("[%s] History fetch failed (%s); serving stale cache.", player.game_name, exc)
-        stale = await get_history_from_cache(db, player_id, limit=limit)
-        if stale:
-            return _to_responses(stale)
+        logger.warning("[%s] History page offset=%d failed (%s); serving stored matches.", name, offset, exc)
+
+    stored = await get_history_from_cache(db, player_id, limit=limit, offset=offset)
+    if not stored:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not load match history. Riot API unavailable, please try again later.",
         )
-    return []
+    return _to_responses(stored)
 
 
 async def _require_snapshot(db: AsyncSession, snapshot_id: int, user: User) -> None:
@@ -118,30 +114,14 @@ async def get_stats(
     )
 
 
-@router.get("/player/{player_id}/most-played", response_model=list[MostPlayedChampionResponse])
-async def get_most_played_champions(
+@router.get("/player/{player_id}/champions", response_model=list[PlayerChampionStats])
+async def get_champion_stats(
     player_id: int,
+    limit: int = Query(default=10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    ddragon_client: DDragonClient = Depends(get_ddragon_client),
 ):
-    """Top 3 campeones en las últimas partidas del jugador (desde el historial en BD)."""
+    """Rendimiento por campeón sobre todas las partidas guardadas del jugador (historial y análisis)."""
     if not await get_player_by_id(db, player_id, user_id=current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
-
-    counts: Counter[str] = Counter()
-    wins: Counter[str] = Counter()
-    for match in await get_history_from_cache(db, player_id):
-        counts[match.champion] += 1
-        wins[match.champion] += match.win
-
-    version = ddragon_client.version or FALLBACK_VERSION
-    return [
-        MostPlayedChampionResponse(
-            champion_name=name,
-            games_played=count,
-            win_rate=round(wins[name] / count * 100, 2),
-            icon_url=ddragon_client.champion_icon_url(version, name),
-        )
-        for name, count in counts.most_common(3)
-    ]
+    return [PlayerChampionStats.model_validate(dict(row)) for row in await champion_stats(db, player_id, limit=limit)]

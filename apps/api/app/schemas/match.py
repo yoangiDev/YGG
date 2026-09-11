@@ -213,8 +213,22 @@ class SnapshotStatsResponse(BaseModel):
             two_or_more_void_grubs_rate=f"{sum(m.void_grubs for m in matches)}/{n}",
         )
 
-class MostPlayedChampionResponse(BaseModel):
+class PlayerChampionStats(BaseModel):
+    """Rendimiento de un jugador con un campeón (consulta SQL player_champion_stats).
+
+    kills, deaths, assists y vision_score son medias por partida; kda y los ratios
+    por minuto se calculan sobre el total de sus partidas con ese campeón.
+    """
+
     champion_name: str
-    games_played: int
+    games: int
+    wins: int
+    losses: int
     win_rate: float
-    icon_url: str
+    kills: float
+    deaths: float
+    assists: float
+    kda: float
+    cs_per_min: float
+    dmg_per_min: float
+    vision_score: float

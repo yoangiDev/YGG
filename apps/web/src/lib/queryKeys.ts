@@ -12,7 +12,7 @@ export const queryKeys = {
   player: (playerId: number) => ["players", playerId] as const,
   playerSummary: (playerId: number) => ["players", playerId, "summary"] as const,
   playerMatches: (playerId: number) => ["players", playerId, "matches"] as const,
-  mostPlayed: (playerId: number) => ["players", playerId, "most-played"] as const,
+  playerChampions: (playerId: number) => ["players", playerId, "champions"] as const,
   snapshots: (playerId: number) => ["players", playerId, "snapshots"] as const,
 
   snapshot: (snapshotId: number) => ["snapshots", snapshotId] as const,

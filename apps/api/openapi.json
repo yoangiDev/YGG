@@ -654,9 +654,9 @@
         "tags": [
           "matches"
         ],
-        "summary": "List Live Matches",
-        "description": "Últimas N partidas del jugador (caché de 1 h), sin filtro de rol ni dependencia de snapshots.",
-        "operationId": "matches_list_live_matches",
+        "summary": "List Player Matches",
+        "description": "Historial del jugador por páginas, de la partida más reciente a la más antigua.\n\nLa primera página sale de la base de datos si se sincronizó hace menos de una\nhora; las demás siguen la paginación de Riot reutilizando lo ya guardado. Si\nRiot falla, se sirve lo guardado para esa página.",
+        "operationId": "matches_list_player_matches",
         "security": [
           {
             "HTTPBearer": []
@@ -685,16 +685,30 @@
             }
           },
           {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 0,
+              "description": "Matches to skip, newest first",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Matches to skip, newest first"
+          },
+          {
             "name": "live",
             "in": "query",
             "required": false,
             "schema": {
               "type": "boolean",
-              "description": "Force full fetch from Riot API",
+              "description": "Force a fresh page from Riot API",
               "default": false,
               "title": "Live"
             },
-            "description": "Force full fetch from Riot API"
+            "description": "Force a fresh page from Riot API"
           },
           {
             "name": "sync",
@@ -702,11 +716,11 @@
             "required": false,
             "schema": {
               "type": "boolean",
-              "description": "Fetch new matches from Riot until stored history is reached",
+              "description": "Same as live (kept for older clients)",
               "default": false,
               "title": "Sync"
             },
-            "description": "Fetch new matches from Riot until stored history is reached"
+            "description": "Same as live (kept for older clients)"
           }
         ],
         "responses": {
@@ -719,13 +733,13 @@
                   "items": {
                     "$ref": "#/components/schemas/MatchResponse"
                   },
-                  "title": "Response Matches List Live Matches"
+                  "title": "Response Matches List Player Matches"
                 }
               }
             }
           },
           "503": {
-            "description": "Riot API unavailable and nothing cached"
+            "description": "Riot API unavailable and nothing stored for that page"
           },
           "422": {
             "description": "Validation Error",
@@ -863,14 +877,14 @@
         }
       }
     },
-    "/matches/player/{player_id}/most-played": {
+    "/matches/player/{player_id}/champions": {
       "get": {
         "tags": [
           "matches"
         ],
-        "summary": "Get Most Played Champions",
-        "description": "Top 3 campeones en las últimas partidas del jugador (desde el historial en BD).",
-        "operationId": "matches_get_most_played_champions",
+        "summary": "Get Champion Stats",
+        "description": "Rendimiento por campeón sobre todas las partidas guardadas del jugador (historial y análisis).",
+        "operationId": "matches_get_champion_stats",
         "security": [
           {
             "HTTPBearer": []
@@ -885,6 +899,18 @@
               "type": "integer",
               "title": "Player Id"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -895,9 +921,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/MostPlayedChampionResponse"
+                    "$ref": "#/components/schemas/PlayerChampionStats"
                   },
-                  "title": "Response Matches Get Most Played Champions"
+                  "title": "Response Matches Get Champion Stats"
                 }
               }
             }
@@ -3190,34 +3216,6 @@
         ],
         "title": "MessageResponse"
       },
-      "MostPlayedChampionResponse": {
-        "properties": {
-          "champion_name": {
-            "type": "string",
-            "title": "Champion Name"
-          },
-          "games_played": {
-            "type": "integer",
-            "title": "Games Played"
-          },
-          "win_rate": {
-            "type": "number",
-            "title": "Win Rate"
-          },
-          "icon_url": {
-            "type": "string",
-            "title": "Icon Url"
-          }
-        },
-        "type": "object",
-        "required": [
-          "champion_name",
-          "games_played",
-          "win_rate",
-          "icon_url"
-        ],
-        "title": "MostPlayedChampionResponse"
-      },
       "Page_AdminPlayerOut_": {
         "properties": {
           "items": {
@@ -3372,6 +3370,75 @@
           "offset"
         ],
         "title": "Page[UserOut]"
+      },
+      "PlayerChampionStats": {
+        "properties": {
+          "champion_name": {
+            "type": "string",
+            "title": "Champion Name"
+          },
+          "games": {
+            "type": "integer",
+            "title": "Games"
+          },
+          "wins": {
+            "type": "integer",
+            "title": "Wins"
+          },
+          "losses": {
+            "type": "integer",
+            "title": "Losses"
+          },
+          "win_rate": {
+            "type": "number",
+            "title": "Win Rate"
+          },
+          "kills": {
+            "type": "number",
+            "title": "Kills"
+          },
+          "deaths": {
+            "type": "number",
+            "title": "Deaths"
+          },
+          "assists": {
+            "type": "number",
+            "title": "Assists"
+          },
+          "kda": {
+            "type": "number",
+            "title": "Kda"
+          },
+          "cs_per_min": {
+            "type": "number",
+            "title": "Cs Per Min"
+          },
+          "dmg_per_min": {
+            "type": "number",
+            "title": "Dmg Per Min"
+          },
+          "vision_score": {
+            "type": "number",
+            "title": "Vision Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "champion_name",
+          "games",
+          "wins",
+          "losses",
+          "win_rate",
+          "kills",
+          "deaths",
+          "assists",
+          "kda",
+          "cs_per_min",
+          "dmg_per_min",
+          "vision_score"
+        ],
+        "title": "PlayerChampionStats",
+        "description": "Rendimiento de un jugador con un campeón (consulta SQL player_champion_stats).\n\nkills, deaths, assists y vision_score son medias por partida; kda y los ratios\npor minuto se calculan sobre el total de sus partidas con ese campeón."
       },
       "PlayerCreate": {
         "properties": {
