@@ -141,6 +141,99 @@ function makeMatch(game: number) {
 
 export const matches = Array.from({ length: 24 }, (_, game) => makeMatch(game));
 
+const ROLES = ["TOP", "JUNGLE", "MID", "BOTTOM", "SUPPORT"];
+const LINEUPS = [
+  { champions: ["Aatrox", "Vi", "Ahri", "Jinx", "Nautilus"], names: ["Zeus", "Oner", "Faker", "Gumayusi", "Keria"] },
+  { champions: ["Gnar", "Sejuani", "Azir", "Kaisa", "Rakan"], names: ["Kiin", "Canyon", "Chovy", "Peyz", "Lehends"] },
+];
+
+/** Los 10 participantes de una partida del historial; Faker (puuid-1) es el jugador seguido. */
+export function matchDetails(matchId: string) {
+  const game = Math.max(0, matches.findIndex((m) => m.match_id === matchId));
+  const base = matches[game] ?? makeMatch(0);
+  const minutes = base.duration / 60;
+  const teams = [100, 200].map((teamId, side) => {
+    const win = side === 0 ? base.win : !base.win;
+    const lineup = LINEUPS[side] ?? LINEUPS[0];
+    const participants = ROLES.map((role, slot) => {
+      const tracked = side === 0 && slot === 2;
+      const kills = tracked ? base.kills : (game + slot * 3 + side) % 8;
+      const deaths = tracked ? base.deaths : 1 + ((game + slot + side * 2) % 6);
+      const assists = tracked ? base.assists : 2 + ((game * 2 + slot) % 11);
+      const cs = role === "SUPPORT" ? 38 : role === "JUNGLE" ? 190 : tracked ? base.total_cs : 210 + slot * 12;
+      const damage = tracked ? base.damage : Math.round(minutes * (380 + ((slot * 131 + side * 57) % 520)));
+      const vision = role === "SUPPORT" ? 72 : 16 + slot * 3;
+      return {
+        puuid: tracked ? "puuid-1" : `puuid-${side}-${slot}`,
+        game_name: lineup.names[slot] ?? "Player",
+        tag_line: side === 0 ? "KR1" : "KR2",
+        champion: tracked ? base.champion : (lineup.champions[slot] ?? "Ahri"),
+        champion_level: 14 + ((slot + side) % 5),
+        team_id: teamId,
+        role,
+        win,
+        kills,
+        deaths,
+        assists,
+        kda: Math.round(((kills + assists) / Math.max(deaths, 1)) * 100) / 100,
+        kill_participation: 40 + ((slot * 9 + side * 5) % 35),
+        cs,
+        cs_per_min: Math.round((cs / minutes) * 10) / 10,
+        gold: Math.round(minutes * (300 + slot * 25)),
+        damage,
+        damage_per_min: Math.round((damage / minutes) * 10) / 10,
+        damage_share: 20,
+        damage_taken: 18_000 + slot * 1500,
+        vision_score: vision,
+        vision_per_min: Math.round((vision / minutes) * 100) / 100,
+        wards_placed: role === "SUPPORT" ? 34 : 8,
+        control_wards: role === "SUPPORT" ? 9 : 2,
+        items: ITEMS.slice(0, 6).map((item, index) => (index <= 3 + (slot % 3) ? item : 0)),
+        trinket: ITEMS[6] ?? 0,
+        spells: [4, 14],
+        keystone: 8112,
+        secondary_tree: 8100,
+        score: 0,
+        placement: 0,
+        badge: null as "MVP" | "ACE" | null,
+      };
+    });
+    return {
+      team_id: teamId,
+      win,
+      kills: participants.reduce((sum, p) => sum + p.kills, 0),
+      towers: win ? 9 : 3,
+      inhibitors: win ? 2 : 0,
+      dragons: win ? 3 : 1,
+      barons: win ? 1 : 0,
+      heralds: win ? 1 : 0,
+      grubs: win ? 4 : 2,
+      atakhans: 0,
+      participants,
+    };
+  });
+
+  // Puntuación simple por KDA y daño: el mejor tiene 100, MVP para el mejor ganador y ACE para el mejor perdedor.
+  const everyone = teams.flatMap((team) => team.participants);
+  const raw = everyone.map((p) => p.kda + p.damage_per_min / 200);
+  const best = Math.max(...raw);
+  everyone.forEach((p, index) => (p.score = Math.round(((raw[index] ?? 0) / best) * 100)));
+  [...everyone].sort((a, b) => b.score - a.score).forEach((p, index) => (p.placement = index + 1));
+  for (const team of teams) {
+    const [top] = [...team.participants].sort((a, b) => a.placement - b.placement);
+    top.badge = team.win ? "MVP" : "ACE";
+  }
+
+  return {
+    match_id: matchId,
+    creation_time: base.creation_time,
+    duration: base.duration,
+    queue_id: 420,
+    game_version: "16.10.1",
+    teams,
+  };
+}
+
 function movingAverage(values: number[], window = 4): number[] {
   return values.map((_, index) => {
     const chunk = values.slice(Math.max(0, index - window + 1), index + 1);

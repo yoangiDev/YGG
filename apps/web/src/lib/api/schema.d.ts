@@ -333,6 +333,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/matches/{match_id}/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Match Details
+         * @description Los 10 participantes de una partida: build, estadísticas y puntuación relativa.
+         *
+         *     La primera vez se pide a Riot y se guarda; después sale de la base de datos.
+         */
+        get: operations["matches_get_match_details"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshots/player/{player_id}": {
         parameters: {
             query?: never;
@@ -989,6 +1011,94 @@ export interface components {
                 [key: string]: "ok" | "error";
             };
         };
+        /** MatchDetailsResponse */
+        MatchDetailsResponse: {
+            /** Match Id */
+            match_id: string;
+            /**
+             * Creation Time
+             * Format: date-time
+             */
+            creation_time: string;
+            /** Duration */
+            duration: number;
+            /** Queue Id */
+            queue_id: number;
+            /** Game Version */
+            game_version: string;
+            /** Teams */
+            teams: components["schemas"]["MatchTeamDetails"][];
+        };
+        /**
+         * MatchParticipantDetails
+         * @description Un participante de la partida. `score` es relativa a la partida (el mejor tiene 100).
+         */
+        MatchParticipantDetails: {
+            /** Puuid */
+            puuid: string;
+            /** Game Name */
+            game_name: string;
+            /** Tag Line */
+            tag_line: string;
+            /** Champion */
+            champion: string;
+            /** Champion Level */
+            champion_level: number;
+            /** Team Id */
+            team_id: number;
+            /** Role */
+            role: string;
+            /** Win */
+            win: boolean;
+            /** Kills */
+            kills: number;
+            /** Deaths */
+            deaths: number;
+            /** Assists */
+            assists: number;
+            /** Kda */
+            kda: number;
+            /** Kill Participation */
+            kill_participation: number;
+            /** Cs */
+            cs: number;
+            /** Cs Per Min */
+            cs_per_min: number;
+            /** Gold */
+            gold: number;
+            /** Damage */
+            damage: number;
+            /** Damage Per Min */
+            damage_per_min: number;
+            /** Damage Share */
+            damage_share: number;
+            /** Damage Taken */
+            damage_taken: number;
+            /** Vision Score */
+            vision_score: number;
+            /** Vision Per Min */
+            vision_per_min: number;
+            /** Wards Placed */
+            wards_placed: number;
+            /** Control Wards */
+            control_wards: number;
+            /** Items */
+            items: number[];
+            /** Trinket */
+            trinket: number;
+            /** Spells */
+            spells: number[];
+            /** Keystone */
+            keystone: number;
+            /** Secondary Tree */
+            secondary_tree: number;
+            /** Score */
+            score: number;
+            /** Placement */
+            placement: number;
+            /** Badge */
+            badge?: ("MVP" | "ACE") | null;
+        };
         /** MatchResponse */
         MatchResponse: {
             /** Match Id */
@@ -1209,6 +1319,31 @@ export interface components {
             readonly dragon_setups_summary: {
                 [key: string]: unknown;
             };
+        };
+        /** MatchTeamDetails */
+        MatchTeamDetails: {
+            /** Team Id */
+            team_id: number;
+            /** Win */
+            win: boolean;
+            /** Kills */
+            kills: number;
+            /** Towers */
+            towers: number;
+            /** Inhibitors */
+            inhibitors: number;
+            /** Dragons */
+            dragons: number;
+            /** Barons */
+            barons: number;
+            /** Heralds */
+            heralds: number;
+            /** Grubs */
+            grubs: number;
+            /** Atakhans */
+            atakhans: number;
+            /** Participants */
+            participants: components["schemas"]["MatchParticipantDetails"][];
         };
         /** MessageResponse */
         MessageResponse: {
@@ -2484,6 +2619,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    matches_get_match_details: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchDetailsResponse"];
+                };
+            };
+            /** @description Not a match of the user's players (or not stored, in the demo) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Riot API unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

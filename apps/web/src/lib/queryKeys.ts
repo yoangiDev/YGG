@@ -21,6 +21,8 @@ export const queryKeys = {
     ["snapshots", snapshotId, "dashboard", compare] as const,
   snapshotMatches: (snapshotId: number) => ["snapshots", snapshotId, "matches"] as const,
 
+  matchDetails: (matchId: string) => ["matches", matchId, "details"] as const,
+
   cutoffs: (region: string) => ["cutoffs", region] as const,
 
   admin: {

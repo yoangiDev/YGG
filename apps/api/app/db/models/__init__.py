@@ -7,6 +7,7 @@ resuelvan y que Alembic vea el metadata completo.
 from app.db.models.job import Job
 from app.db.models.legacy_link import LegacyUnresolvedLink
 from app.db.models.match import Match
+from app.db.models.match_detail import MatchDetail
 from app.db.models.participant import MatchParticipant
 from app.db.models.player import Player
 from app.db.models.player_history import PlayerHistoryEntry
@@ -20,6 +21,7 @@ __all__ = [
     "Job",
     "LegacyUnresolvedLink",
     "Match",
+    "MatchDetail",
     "MatchParticipant",
     "Player",
     "PlayerHistoryEntry",

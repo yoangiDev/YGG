@@ -941,6 +941,62 @@
         }
       }
     },
+    "/matches/{match_id}/details": {
+      "get": {
+        "tags": [
+          "matches"
+        ],
+        "summary": "Get Match Details",
+        "description": "Los 10 participantes de una partida: build, estadísticas y puntuación relativa.\n\nLa primera vez se pide a Riot y se guarda; después sale de la base de datos.",
+        "operationId": "matches_get_match_details",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 50,
+              "pattern": "^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchDetailsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a match of the user's players (or not stored, in the demo)"
+          },
+          "503": {
+            "description": "Riot API unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/snapshots/player/{player_id}": {
       "get": {
         "tags": [
@@ -2621,6 +2677,233 @@
         ],
         "title": "HealthResponse"
       },
+      "MatchDetailsResponse": {
+        "properties": {
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "creation_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creation Time"
+          },
+          "duration": {
+            "type": "integer",
+            "title": "Duration"
+          },
+          "queue_id": {
+            "type": "integer",
+            "title": "Queue Id"
+          },
+          "game_version": {
+            "type": "string",
+            "title": "Game Version"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/MatchTeamDetails"
+            },
+            "type": "array",
+            "title": "Teams"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "creation_time",
+          "duration",
+          "queue_id",
+          "game_version",
+          "teams"
+        ],
+        "title": "MatchDetailsResponse"
+      },
+      "MatchParticipantDetails": {
+        "properties": {
+          "puuid": {
+            "type": "string",
+            "title": "Puuid"
+          },
+          "game_name": {
+            "type": "string",
+            "title": "Game Name"
+          },
+          "tag_line": {
+            "type": "string",
+            "title": "Tag Line"
+          },
+          "champion": {
+            "type": "string",
+            "title": "Champion"
+          },
+          "champion_level": {
+            "type": "integer",
+            "title": "Champion Level"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "win": {
+            "type": "boolean",
+            "title": "Win"
+          },
+          "kills": {
+            "type": "integer",
+            "title": "Kills"
+          },
+          "deaths": {
+            "type": "integer",
+            "title": "Deaths"
+          },
+          "assists": {
+            "type": "integer",
+            "title": "Assists"
+          },
+          "kda": {
+            "type": "number",
+            "title": "Kda"
+          },
+          "kill_participation": {
+            "type": "number",
+            "title": "Kill Participation"
+          },
+          "cs": {
+            "type": "integer",
+            "title": "Cs"
+          },
+          "cs_per_min": {
+            "type": "number",
+            "title": "Cs Per Min"
+          },
+          "gold": {
+            "type": "integer",
+            "title": "Gold"
+          },
+          "damage": {
+            "type": "integer",
+            "title": "Damage"
+          },
+          "damage_per_min": {
+            "type": "number",
+            "title": "Damage Per Min"
+          },
+          "damage_share": {
+            "type": "number",
+            "title": "Damage Share"
+          },
+          "damage_taken": {
+            "type": "integer",
+            "title": "Damage Taken"
+          },
+          "vision_score": {
+            "type": "integer",
+            "title": "Vision Score"
+          },
+          "vision_per_min": {
+            "type": "number",
+            "title": "Vision Per Min"
+          },
+          "wards_placed": {
+            "type": "integer",
+            "title": "Wards Placed"
+          },
+          "control_wards": {
+            "type": "integer",
+            "title": "Control Wards"
+          },
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "trinket": {
+            "type": "integer",
+            "title": "Trinket"
+          },
+          "spells": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Spells"
+          },
+          "keystone": {
+            "type": "integer",
+            "title": "Keystone"
+          },
+          "secondary_tree": {
+            "type": "integer",
+            "title": "Secondary Tree"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "placement": {
+            "type": "integer",
+            "title": "Placement"
+          },
+          "badge": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MVP",
+                  "ACE"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge"
+          }
+        },
+        "type": "object",
+        "required": [
+          "puuid",
+          "game_name",
+          "tag_line",
+          "champion",
+          "champion_level",
+          "team_id",
+          "role",
+          "win",
+          "kills",
+          "deaths",
+          "assists",
+          "kda",
+          "kill_participation",
+          "cs",
+          "cs_per_min",
+          "gold",
+          "damage",
+          "damage_per_min",
+          "damage_share",
+          "damage_taken",
+          "vision_score",
+          "vision_per_min",
+          "wards_placed",
+          "control_wards",
+          "items",
+          "trinket",
+          "spells",
+          "keystone",
+          "secondary_tree",
+          "score",
+          "placement"
+        ],
+        "title": "MatchParticipantDetails",
+        "description": "Un participante de la partida. `score` es relativa a la partida (el mejor tiene 100)."
+      },
       "MatchResponse": {
         "properties": {
           "match_id": {
@@ -3197,6 +3480,72 @@
           "dragon_setups_summary"
         ],
         "title": "MatchResponse"
+      },
+      "MatchTeamDetails": {
+        "properties": {
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "win": {
+            "type": "boolean",
+            "title": "Win"
+          },
+          "kills": {
+            "type": "integer",
+            "title": "Kills"
+          },
+          "towers": {
+            "type": "integer",
+            "title": "Towers"
+          },
+          "inhibitors": {
+            "type": "integer",
+            "title": "Inhibitors"
+          },
+          "dragons": {
+            "type": "integer",
+            "title": "Dragons"
+          },
+          "barons": {
+            "type": "integer",
+            "title": "Barons"
+          },
+          "heralds": {
+            "type": "integer",
+            "title": "Heralds"
+          },
+          "grubs": {
+            "type": "integer",
+            "title": "Grubs"
+          },
+          "atakhans": {
+            "type": "integer",
+            "title": "Atakhans"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/MatchParticipantDetails"
+            },
+            "type": "array",
+            "title": "Participants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_id",
+          "win",
+          "kills",
+          "towers",
+          "inhibitors",
+          "dragons",
+          "barons",
+          "heralds",
+          "grubs",
+          "atakhans",
+          "participants"
+        ],
+        "title": "MatchTeamDetails"
       },
       "MessageResponse": {
         "properties": {

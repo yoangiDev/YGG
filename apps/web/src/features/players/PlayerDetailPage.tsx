@@ -100,7 +100,7 @@ function PlayerDetail({ playerId }: { playerId: number }) {
       />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <MatchHistory playerId={playerId} />
+        <MatchHistory playerId={playerId} trackedPuuid={player.data.puuid} />
         <aside className="flex min-w-0 flex-col gap-6" aria-label="Player statistics">
           <ChampionStatsPanel playerId={playerId} />
           <SnapshotsPanel playerId={playerId} onAnalyse={() => setAnalysisOpen(true)} />

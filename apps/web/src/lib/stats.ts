@@ -69,3 +69,11 @@ export function kdaTone(kda: number): StatTone {
   if (kda >= 3) return "green";
   return "gray";
 }
+
+/** Puntuación de rendimiento 0-100 relativa a la partida (el mejor de los 10 tiene 100). */
+export function scoreTone(score: number): StatTone {
+  if (score >= 90) return "gold";
+  if (score >= 75) return "blue";
+  if (score >= 55) return "green";
+  return "gray";
+}

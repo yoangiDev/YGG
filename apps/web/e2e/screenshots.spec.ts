@@ -35,6 +35,11 @@ test("desktop screens", async ({ page }) => {
   await settle(page);
   await page.screenshot({ path: `${OUT}/03-player.png`, fullPage: true });
 
+  await page.getByRole("button", { name: /Show details/ }).first().click();
+  await expect(page.getByText("Keria")).toBeVisible();
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/03b-match-details.png`, fullPage: true });
+
   await page.goto("/players/1/snapshots/42");
   await expect(page.getByRole("img", { name: /Radar chart/ })).toBeVisible();
   await settle(page);

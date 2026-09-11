@@ -53,6 +53,21 @@ test("compares two snapshots side by side", async ({ page }) => {
   await expect(page.getByRole("row", { name: /Gold diff @14/ })).toContainText("(better)");
 });
 
+test("expands a match of the history with its ten players", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+
+  await page.goto("/players/1");
+  const toggle = page.getByRole("button", { name: /Show details/ }).first();
+  await toggle.click();
+
+  await expect(page.getByRole("button", { name: /Hide details/ }).first()).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("region", { name: /Victory/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: /Defeat/ })).toBeVisible();
+  await expect(page.getByText("Keria")).toBeVisible();
+  await expect(page.getByText("MVP", { exact: true })).toBeVisible();
+});
+
 test("unknown routes inside the app show a not-found page", async ({ page }) => {
   await mockApi(page);
   await signIn(page);

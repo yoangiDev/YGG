@@ -41,6 +41,8 @@ export async function mockApi(target: Page, { admin = false, allowCdn = false, s
       return dashboard ? json(route, dashboard) : json(route, { detail: "Snapshot not found" }, 404);
     }
     if (/^GET \/matches\/snapshot\/\d+$/.test(key)) return json(route, page(data.matches, url));
+    const detailsMatch = /^GET \/matches\/([^/]+)\/details$/.exec(key);
+    if (detailsMatch) return json(route, data.matchDetails(detailsMatch[1]));
 
     switch (key) {
       case "POST /auth/refresh":

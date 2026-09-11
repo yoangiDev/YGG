@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { RefreshCw, Swords } from "lucide-react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { ChevronDown, RefreshCw, Swords } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
 import { ChampionIcon, ItemIcon } from "@/components/player/PlayerBits";
 import { Button } from "@/components/ui/Button";
@@ -15,12 +15,13 @@ import { roleLabel } from "@/lib/roles";
 import { kdaTone, toneText } from "@/lib/stats";
 
 import { FIRST_PAGE, historyPageLimit, mergeHistoryPages, NEXT_PAGE, nextHistoryOffset } from "./historyPaging";
+import { MatchDetails } from "./MatchDetails";
 
 type Match = Schemas["MatchResponse"];
 
-// Columnas compartidas por la cabecera y las filas (la build solo cabe desde lg).
+// Columnas compartidas por la cabecera y las filas (la build solo cabe desde lg); la última es el desplegable.
 const GRID =
-  "sm:grid-cols-[44px_minmax(130px,1.3fr)_repeat(4,minmax(56px,1fr))] lg:grid-cols-[44px_minmax(140px,1.3fr)_repeat(4,minmax(58px,1fr))_176px]";
+  "sm:grid-cols-[44px_minmax(130px,1.3fr)_repeat(4,minmax(56px,1fr))_28px] lg:grid-cols-[44px_minmax(140px,1.3fr)_repeat(4,minmax(58px,1fr))_176px_28px]";
 
 const STAT_LABELS = ["KDA", "CS/min", "DMG/min", "Vision"];
 
@@ -44,58 +45,82 @@ function Stat({
   );
 }
 
-function MatchRow({ match }: { match: Match }) {
+function MatchRow({ match, trackedPuuid }: { match: Match; trackedPuuid: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   const items = [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5];
+
   return (
-    <li
-      className={cn(
-        "relative grid grid-cols-[44px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b border-line py-3.5 pr-4 pl-5 transition-colors hover:bg-white/[0.025] sm:pr-5",
-        GRID,
-      )}
-    >
-      <span aria-hidden="true" className={cn("absolute inset-y-0 left-0 w-[3px]", match.win ? "bg-stat-blue" : "bg-stat-red")} />
-      <ChampionIcon name={match.champion} size={44} />
-      <div className="min-w-0">
-        <p className="truncate text-[15px] font-extrabold tracking-[-0.01em] text-text">{match.champion}</p>
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
-          <span className={cn("text-[10px] font-black tracking-[0.14em] uppercase", match.win ? "text-stat-blue" : "text-stat-red")}>
-            {match.win ? "Win" : "Loss"}
+    <li className="border-b border-line">
+      {/* Toda la fila despliega con el ratón; el botón del final lo hace accesible con teclado. */}
+      <div
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "relative grid cursor-pointer grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-x-4 gap-y-3 py-3.5 pr-4 pl-5 transition-colors hover:bg-white/[0.025] sm:pr-5",
+          GRID,
+          open && "bg-white/[0.025]",
+        )}
+      >
+        <span aria-hidden="true" className={cn("absolute inset-y-0 left-0 w-[3px]", match.win ? "bg-stat-blue" : "bg-stat-red")} />
+        <ChampionIcon name={match.champion} size={44} />
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-extrabold tracking-[-0.01em] text-text">{match.champion}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
+            <span className={cn("text-[10px] font-black tracking-[0.14em] uppercase", match.win ? "text-stat-blue" : "text-stat-red")}>
+              {match.win ? "Win" : "Loss"}
+            </span>
+            <span>{roleLabel(match.player_role)}</span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{formatDuration(match.duration)}</span>
+            <span aria-hidden="true">·</span>
+            <time dateTime={match.creation_time} title={formatDateTime(match.creation_time)}>
+              {timeAgo(match.creation_time)}
+            </time>
+          </p>
+        </div>
+
+        {/* En móvil las cifras bajan a una fila propia; desde sm se integran en las columnas. */}
+        <div className="col-span-3 grid grid-cols-4 gap-3 border-t border-line pt-3 sm:contents">
+          <Stat
+            label="KDA"
+            value={
+              <>
+                {match.kills}/<span className="text-stat-red">{match.deaths}</span>/{match.assists}
+              </>
+            }
+            detail={`${formatNumber(match.kda, 2)} KDA`}
+            detailClassName={toneText[kdaTone(match.kda)]}
+          />
+          <Stat label="CS/min" value={formatNumber(match.cs_per_min, 1)} detail={`${match.total_cs} CS`} />
+          <Stat label="DMG/min" value={formatNumber(match.dmg_per_min, 0)} detail={`${formatCompact(match.damage)} dmg`} />
+          <Stat label="Vision" value={match.vision} detail={`${formatNumber(match.vision_per_min, 2)}/min`} />
+        </div>
+
+        <div role="group" aria-label="Items" className="hidden items-center justify-end gap-0.5 lg:flex">
+          {items.map((item, index) => (
+            <ItemIcon key={index} itemId={item} size={22} />
+          ))}
+          <span className="ml-1.5">
+            <ItemIcon itemId={match.item6} size={22} />
           </span>
-          <span>{roleLabel(match.player_role)}</span>
-          <span aria-hidden="true">·</span>
-          <span className="tabular-nums">{formatDuration(match.duration)}</span>
-          <span aria-hidden="true">·</span>
-          <time dateTime={match.creation_time} title={formatDateTime(match.creation_time)}>
-            {timeAgo(match.creation_time)}
-          </time>
-        </p>
+        </div>
+
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={`${open ? "Hide" : "Show"} details of ${match.champion} ${match.win ? "win" : "loss"} ${timeAgo(match.creation_time)}`}
+          className="col-start-3 row-start-1 grid size-7 cursor-pointer place-items-center justify-self-end border border-transparent text-subtle transition-colors hover:border-line hover:text-acid sm:col-start-auto sm:row-start-auto"
+        >
+          <ChevronDown className={cn("size-4 transition-transform duration-300", open && "rotate-180 text-acid")} aria-hidden="true" />
+        </button>
       </div>
 
-      {/* En móvil las cifras bajan a una fila propia; desde sm se integran en las columnas. */}
-      <div className="col-span-2 grid grid-cols-4 gap-3 border-t border-line pt-3 sm:contents">
-        <Stat
-          label="KDA"
-          value={
-            <>
-              {match.kills}/<span className="text-stat-red">{match.deaths}</span>/{match.assists}
-            </>
-          }
-          detail={`${formatNumber(match.kda, 2)} KDA`}
-          detailClassName={toneText[kdaTone(match.kda)]}
-        />
-        <Stat label="CS/min" value={formatNumber(match.cs_per_min, 1)} detail={`${match.total_cs} CS`} />
-        <Stat label="DMG/min" value={formatNumber(match.dmg_per_min, 0)} detail={`${formatCompact(match.damage)} dmg`} />
-        <Stat label="Vision" value={match.vision} detail={`${formatNumber(match.vision_per_min, 2)}/min`} />
-      </div>
-
-      <div role="group" aria-label="Items" className="hidden items-center justify-end gap-0.5 lg:flex">
-        {items.map((item, index) => (
-          <ItemIcon key={index} itemId={item} size={22} />
-        ))}
-        <span className="ml-1.5">
-          <ItemIcon itemId={match.item6} size={22} />
-        </span>
-      </div>
+      {open && (
+        <div id={panelId}>
+          <MatchDetails matchId={match.match_id} trackedPuuid={trackedPuuid} />
+        </div>
+      )}
     </li>
   );
 }
@@ -114,8 +139,11 @@ function HistorySkeleton() {
   );
 }
 
-/** Historial de partidas: 20 al abrir y 10 más cada vez que se pide, al estilo de dpm.lol. */
-export function MatchHistory({ playerId }: { playerId: number }) {
+/**
+ * Historial de partidas: 20 al abrir y 10 más cada vez que se pide, al estilo de
+ * dpm.lol. Cada partida se despliega con sus 10 participantes.
+ */
+export function MatchHistory({ playerId, trackedPuuid }: { playerId: number; trackedPuuid?: string }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const key = queryKeys.playerMatches(playerId);
@@ -160,7 +188,7 @@ export function MatchHistory({ playerId }: { playerId: number }) {
     <Card className="min-w-0">
       <CardHeader
         title="Match history"
-        description="Ranked solo queue, newest first."
+        description="Ranked solo queue, newest first. Open a match to see all ten players."
         action={
           <Button variant="ghost" size="sm" loading={sync.isPending} onClick={() => sync.mutate()}>
             {!sync.isPending && <RefreshCw className="size-3.5" aria-hidden="true" />}
@@ -189,11 +217,12 @@ export function MatchHistory({ playerId }: { playerId: number }) {
               </span>
             ))}
             <span className="microtext hidden text-right text-subtle lg:block">Build</span>
+            <span />
           </div>
 
           <ul aria-label="Match history">
             {matches.map((match) => (
-              <MatchRow key={match.match_id} match={match} />
+              <MatchRow key={match.match_id} match={match} trackedPuuid={trackedPuuid} />
             ))}
           </ul>
 

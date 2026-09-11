@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
@@ -11,11 +11,16 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.common import Page, PageParams
 from app.schemas.match import MatchResponse, PlayerChampionStats, SnapshotStatsResponse
+from app.schemas.match_details import MatchDetailsResponse
+from app.service.match_details import MatchDetailsUnavailable, get_match_summary, user_can_view_match
 from app.service.match_history import fetch_history_page, get_history_from_cache, is_history_fresh
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+# Ids de match-v5: plataforma y número (EUW1_7200000123, KR_7123456789).
+MATCH_ID_PATTERN = r"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$"
 
 
 def _to_responses(matches) -> list[MatchResponse]:
@@ -125,3 +130,37 @@ async def get_champion_stats(
     if not await get_player_by_id(db, player_id, user_id=current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
     return [PlayerChampionStats.model_validate(dict(row)) for row in await champion_stats(db, player_id, limit=limit)]
+
+
+@router.get(
+    "/{match_id}/details",
+    response_model=MatchDetailsResponse,
+    responses={
+        404: {"description": "Not a match of the user's players (or not stored, in the demo)"},
+        503: {"description": "Riot API unavailable"},
+    },
+)
+async def get_match_details(
+    match_id: str = Path(max_length=50, pattern=MATCH_ID_PATTERN),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Los 10 participantes de una partida: build, estadísticas y puntuación relativa.
+
+    La primera vez se pide a Riot y se guarda; después sale de la base de datos.
+    """
+    if not await user_can_view_match(db, match_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+    try:
+        summary = await get_match_summary(db, match_id)
+    except MatchDetailsUnavailable as exc:
+        code = status.HTTP_404_NOT_FOUND if settings.demo_mode else status.HTTP_503_SERVICE_UNAVAILABLE
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("Match %s details failed (%s).", match_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not load match details. Riot API unavailable, please try again later.",
+        ) from exc
+    return MatchDetailsResponse.model_validate(summary.to_dict())
