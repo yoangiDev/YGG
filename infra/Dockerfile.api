@@ -1,0 +1,28 @@
+# Imagen de la API. Se construye desde la raíz del repo:
+#   docker build -f infra/Dockerfile.api .
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+RUN useradd --create-home --uid 10001 ygg
+
+# El motor de análisis va primero: cambia menos que la API y aprovecha la caché de capas.
+COPY packages/ygg-core/ /opt/ygg-core/
+RUN pip install /opt/ygg-core
+
+COPY apps/api/requirements.txt ./requirements.txt
+RUN pip install -r requirements.txt
+
+COPY apps/api/ ./
+RUN mkdir -p /app/data && chown -R ygg /app/data
+
+USER ygg
+EXPOSE 8000
+
+# Las migraciones se aplican antes de servir: el esquema lo gestiona solo Alembic.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]

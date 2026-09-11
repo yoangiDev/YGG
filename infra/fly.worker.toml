@@ -1,0 +1,20 @@
+# Fly.io: worker de análisis (ARQ). Mismo Dockerfile que la API, sin puerto HTTP.
+#   flyctl deploy --config infra/fly.worker.toml --dockerfile infra/Dockerfile.api
+# Secretos (flyctl secrets set -a ygg-worker ...): DATABASE_URL, REDIS_URL,
+# SECRET_KEY, RIOT_API_KEY y opcionalmente SENTRY_DSN. Ver docs/deploy.md.
+
+app = "ygg-worker"
+primary_region = "mad"
+
+[env]
+  ENVIRONMENT = "production"
+  JOB_BACKEND = "arq"
+  LOG_LEVEL = "INFO"
+
+[processes]
+  worker = "arq app.jobs.worker.WorkerSettings"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["worker"]

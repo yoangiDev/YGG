@@ -160,8 +160,11 @@ Cada fase termina en una rama mergeable, con tests en verde y CI pasando. El ord
 
 | Tarea | Detalle |
 |---|---|
-| Repo | Localizar el repositorio real o `git init` + push. Rama `main` protegida, trabajo en ramas `feat/*`. |
-| Monorepo | Mover a la estructura de arriba (solo mover, sin tocar código todavía). |
+| Repo | **Un solo repo, el que ya existe, renombrado a `ygg`** — el historial desde el TFG es parte del portfolio y dos repos romperían la generación de tipos TS desde el OpenAPI. Localizar el remoto o `git init` + primer commit con el código actual. Rama `main` protegida, trabajo en ramas `feat/*`. |
+| Conservar el TFG | `git tag -a v1.0-tfg` + release en GitHub antes de tocar nada. El estado entregado queda consultable para siempre sin necesidad de un segundo repositorio. |
+| Auditoría de secretos | `gitleaks detect` / `trufflehog git file://.` sobre todo el historial **antes de hacer público el repo**. Si alguna vez se commiteó la clave de Riot, el `SECRET_KEY` del JWT o la *service key* de Supabase, rotarlas y evaluar `git filter-repo`. |
+| Monorepo | Mover a la estructura de arriba con `git mv` (no copiar y borrar, para que `git log --follow` siga el rastro). Solo mover: sin tocar código todavía. |
+| Limpieza | El cliente Flutter sale de `main` cuando el de React funcione (Fase 5); queda preservado en la etiqueta `v1.0-tfg`. Dos frontends en el repo activo leen como desorden. |
 | Docker | `docker-compose.yml` con postgres + redis; `make up` levanta todo. |
 | CI | Reescribir el workflow: lint → tests backend → tests web → build. El build de escritorio/APK se mantiene, pero deja de ser lo único. |
 | Calidad | `ruff` + `mypy` en modo gradual sobre `ygg-core`, `pre-commit` con ambos. |

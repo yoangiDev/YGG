@@ -1,0 +1,627 @@
+{
+ "metadata": {
+  "dataVersion": "2",
+  "matchId": "EUW1_7000000001",
+  "participants": [
+   "puuid-01",
+   "puuid-02",
+   "puuid-03",
+   "puuid-04",
+   "puuid-05",
+   "puuid-06",
+   "puuid-07",
+   "puuid-08",
+   "puuid-09",
+   "puuid-10"
+  ]
+ },
+ "info": {
+  "gameCreation": 1780000000000,
+  "gameDuration": 1845,
+  "gameMode": "CLASSIC",
+  "gameVersion": "16.10.712.3456",
+  "mapId": 11,
+  "platformId": "EUW1",
+  "queueId": 420,
+  "participants": [
+   {
+    "participantId": 1,
+    "puuid": "puuid-01",
+    "riotIdGameName": "Player01",
+    "riotIdTagline": "TEST",
+    "teamId": 100,
+    "teamPosition": "TOP",
+    "championName": "Gnar",
+    "win": true,
+    "kills": 3,
+    "deaths": 4,
+    "assists": 4,
+    "visionScore": 18,
+    "totalDamageDealtToChampions": 11500,
+    "goldEarned": 9400,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 2300,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1220
+   },
+   {
+    "participantId": 2,
+    "puuid": "puuid-02",
+    "riotIdGameName": "Player02",
+    "riotIdTagline": "TEST",
+    "teamId": 100,
+    "teamPosition": "JUNGLE",
+    "championName": "LeeSin",
+    "win": true,
+    "kills": 4,
+    "deaths": 1,
+    "assists": 7,
+    "visionScore": 21,
+    "totalDamageDealtToChampions": 13000,
+    "goldEarned": 9800,
+    "totalMinionsKilled": 30,
+    "neutralMinionsKilled": 150,
+    "summoner1Id": 4,
+    "summoner2Id": 11,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 2600,
+    "enemyJungleMonsterKills": 6,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1209
+   },
+   {
+    "participantId": 3,
+    "puuid": "puuid-03",
+    "riotIdGameName": "Player03",
+    "riotIdTagline": "TEST",
+    "teamId": 100,
+    "teamPosition": "MIDDLE",
+    "championName": "Ahri",
+    "win": true,
+    "kills": 5,
+    "deaths": 2,
+    "assists": 1,
+    "visionScore": 24,
+    "totalDamageDealtToChampions": 14500,
+    "goldEarned": 10200,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 2900,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1206
+   },
+   {
+    "participantId": 4,
+    "puuid": "puuid-04",
+    "riotIdGameName": "Player04",
+    "riotIdTagline": "TEST",
+    "teamId": 100,
+    "teamPosition": "BOTTOM",
+    "championName": "Jinx",
+    "win": true,
+    "kills": 6,
+    "deaths": 3,
+    "assists": 4,
+    "visionScore": 27,
+    "totalDamageDealtToChampions": 16000,
+    "goldEarned": 10600,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 3200,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 3006
+   },
+   {
+    "participantId": 5,
+    "puuid": "puuid-05",
+    "riotIdGameName": "Player05",
+    "riotIdTagline": "TEST",
+    "teamId": 100,
+    "teamPosition": "UTILITY",
+    "championName": "Thresh",
+    "win": true,
+    "kills": 2,
+    "deaths": 4,
+    "assists": 7,
+    "visionScore": 70,
+    "totalDamageDealtToChampions": 17500,
+    "goldEarned": 11000,
+    "totalMinionsKilled": 30,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 3500,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 6,
+    "roleBoundItem": 1208
+   },
+   {
+    "participantId": 6,
+    "puuid": "puuid-06",
+    "riotIdGameName": "Player06",
+    "riotIdTagline": "TEST",
+    "teamId": 200,
+    "teamPosition": "TOP",
+    "championName": "Renekton",
+    "win": false,
+    "kills": 3,
+    "deaths": 1,
+    "assists": 1,
+    "visionScore": 33,
+    "totalDamageDealtToChampions": 19000,
+    "goldEarned": 11400,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 3800,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1220
+   },
+   {
+    "participantId": 7,
+    "puuid": "puuid-07",
+    "riotIdGameName": "Player07",
+    "riotIdTagline": "TEST",
+    "teamId": 200,
+    "teamPosition": "JUNGLE",
+    "championName": "Viego",
+    "win": false,
+    "kills": 4,
+    "deaths": 2,
+    "assists": 4,
+    "visionScore": 36,
+    "totalDamageDealtToChampions": 20500,
+    "goldEarned": 11800,
+    "totalMinionsKilled": 30,
+    "neutralMinionsKilled": 150,
+    "summoner1Id": 4,
+    "summoner2Id": 11,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 4100,
+    "enemyJungleMonsterKills": 6,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1209
+   },
+   {
+    "participantId": 8,
+    "puuid": "puuid-08",
+    "riotIdGameName": "Player08",
+    "riotIdTagline": "TEST",
+    "teamId": 200,
+    "teamPosition": "MIDDLE",
+    "championName": "Syndra",
+    "win": false,
+    "kills": 5,
+    "deaths": 3,
+    "assists": 7,
+    "visionScore": 39,
+    "totalDamageDealtToChampions": 22000,
+    "goldEarned": 12200,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 4400,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 1206
+   },
+   {
+    "participantId": 9,
+    "puuid": "puuid-09",
+    "riotIdGameName": "Player09",
+    "riotIdTagline": "TEST",
+    "teamId": 200,
+    "teamPosition": "BOTTOM",
+    "championName": "Kaisa",
+    "win": false,
+    "kills": 6,
+    "deaths": 4,
+    "assists": 1,
+    "visionScore": 42,
+    "totalDamageDealtToChampions": 23500,
+    "goldEarned": 12600,
+    "totalMinionsKilled": 180,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 4700,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 2,
+    "roleBoundItem": 3006
+   },
+   {
+    "participantId": 10,
+    "puuid": "puuid-10",
+    "riotIdGameName": "Player10",
+    "riotIdTagline": "TEST",
+    "teamId": 200,
+    "teamPosition": "UTILITY",
+    "championName": "Nautilus",
+    "win": false,
+    "kills": 2,
+    "deaths": 1,
+    "assists": 4,
+    "visionScore": 70,
+    "totalDamageDealtToChampions": 25000,
+    "goldEarned": 13000,
+    "totalMinionsKilled": 30,
+    "neutralMinionsKilled": 8,
+    "summoner1Id": 4,
+    "summoner2Id": 14,
+    "item0": 3031,
+    "item1": 3006,
+    "item2": 6672,
+    "item3": 3036,
+    "item4": 0,
+    "item5": 0,
+    "item6": 3340,
+    "perks": {
+     "styles": [
+      {
+       "description": "primaryStyle",
+       "style": 8100,
+       "selections": [
+        {
+         "perk": 8112
+        },
+        {
+         "perk": 8139
+        }
+       ]
+      },
+      {
+       "description": "subStyle",
+       "style": 8300,
+       "selections": [
+        {
+         "perk": 8304
+        }
+       ]
+      }
+     ]
+    },
+    "damageDealtToBuildings": 5000,
+    "enemyJungleMonsterKills": 0,
+    "visionWardsBoughtInGame": 6,
+    "roleBoundItem": 1208
+   }
+  ],
+  "teams": [
+   {
+    "teamId": 100,
+    "win": true,
+    "objectives": {
+     "dragon": {
+      "first": true,
+      "kills": 3
+     },
+     "horde": {
+      "first": true,
+      "kills": 4
+     },
+     "riftHerald": {
+      "first": true,
+      "kills": 1
+     }
+    }
+   },
+   {
+    "teamId": 200,
+    "win": false,
+    "objectives": {
+     "dragon": {
+      "first": false,
+      "kills": 1
+     },
+     "horde": {
+      "first": false,
+      "kills": 2
+     },
+     "riftHerald": {
+      "first": false,
+      "kills": 0
+     }
+    }
+   }
+  ]
+ }
+}

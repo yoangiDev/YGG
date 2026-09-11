@@ -8,20 +8,33 @@ venv/
 # --- Variables de Entorno (Tus secretos y claves) ---
 .env
 **/.env
+!.env.example
 
 # --- Archivos de Python innecesarios ---
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # --- Archivos de caché cargados al ejecutar la app ---
-backend/data/
+apps/api/data/
+.ygg/
+*.duckdb
+*.duckdb.wal
 
 # --- Logs y Bases de datos locales
 *.log
 *.sqlite
+.pgdata/
 
-# --- Flutter / Dart build artifacts
-frontend/build/
-frontend/.dart_tool/
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
+# --- Node / web
+node_modules/
+dist/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/.vite/

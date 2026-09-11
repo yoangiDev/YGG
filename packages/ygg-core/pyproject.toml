@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ygg-core"
+version = "0.1.0"
+description = "Motor de análisis de partidas de League of Legends: cliente de Riot, enriquecimiento de timeline y métricas."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.10",
+    "certifi>=2024.8.30",
+]
+
+[project.optional-dependencies]
+store = ["duckdb>=1.1"]
+dev = [
+    "duckdb>=1.1",
+    "mypy>=1.11",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+]
+
+[project.scripts]
+ygg = "ygg_core.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ygg_core"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src/ygg_core"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["duckdb", "duckdb.*"]
+ignore_missing_imports = true

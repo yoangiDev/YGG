@@ -1,0 +1,72 @@
+name: Deploy
+
+# merge a main → CI verde → migraciones + API → worker → web.
+# Requiere configurar el entorno "production" en GitHub (ver docs/deploy.md):
+#   secrets: FLY_API_TOKEN, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+#   vars:    API_URL (https://api.ygg.tudominio.dev), DEMO_EMAIL, DEMO_PASSWORD (opcionales)
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API + worker (Fly.io)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # release_command aplica `alembic upgrade head` antes de sustituir las máquinas:
+      # si la migración falla, la versión anterior sigue sirviendo.
+      - name: Deploy API
+        run: flyctl deploy --config infra/fly.api.toml --dockerfile infra/Dockerfile.api --remote-only --wait-timeout 300
+      - name: Deploy worker
+        run: flyctl deploy --config infra/fly.worker.toml --dockerfile infra/Dockerfile.api --remote-only --wait-timeout 300
+      - name: Smoke test
+        run: curl --fail --silent --show-error --retry 6 --retry-delay 5 --retry-all-errors "${{ vars.API_URL }}/health"
+
+  web:
+    name: Web (Vercel)
+    needs: api
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npx --yes vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build
+        run: npx --yes vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VITE_API_URL: ${{ vars.API_URL }}
+          VITE_DEMO_EMAIL: ${{ vars.DEMO_EMAIL }}
+          VITE_DEMO_PASSWORD: ${{ vars.DEMO_PASSWORD }}
+      - name: Deploy
+        run: npx --yes vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

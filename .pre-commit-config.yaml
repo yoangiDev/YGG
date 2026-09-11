@@ -1,0 +1,27 @@
+# Instalar una vez con:  pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff-check
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.1
+    hooks:
+      - id: mypy
+        files: ^packages/ygg-core/src/
+        args: ["--config-file", "packages/ygg-core/pyproject.toml"]
+        additional_dependencies: ["aiohttp>=3.10", "certifi"]

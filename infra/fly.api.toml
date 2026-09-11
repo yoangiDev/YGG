@@ -1,0 +1,53 @@
+# Fly.io: API. Se despliega desde la raíz del repo:
+#   flyctl deploy --config infra/fly.api.toml --dockerfile infra/Dockerfile.api
+# Secretos (flyctl secrets set -a ygg-api ...): DATABASE_URL, REDIS_URL,
+# SECRET_KEY, RIOT_API_KEY y opcionalmente SENTRY_DSN. Ver docs/deploy.md.
+
+app = "ygg-api"
+primary_region = "mad"
+
+[deploy]
+  # Las migraciones corren una vez, antes de sustituir las máquinas. Si fallan, no se despliega.
+  release_command = "alembic upgrade head"
+  strategy = "rolling"
+
+[env]
+  ENVIRONMENT = "production"
+  JOB_BACKEND = "arq"
+  LOG_LEVEL = "INFO"
+  # Sustituye el dominio: la web y la API deben compartir dominio registrable (cookie SameSite=Lax).
+  CORS_ORIGINS = "https://ygg.example.dev"
+  # Detrás del proxy de Fly la IP real llega en X-Forwarded-For.
+  TRUST_PROXY_HEADERS = "true"
+  # Para la demo pública con datos sembrados: "true".
+  DEMO_MODE = "false"
+
+[processes]
+  # Sin `alembic upgrade` aquí: ya lo hace release_command.
+  app = "uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Una máquina siempre encendida: el arranque en frío de la demo no puede pasar de 3 s.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "15s"
+    timeout = "3s"
+    method = "GET"
+    path = "/health/live"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["app"]

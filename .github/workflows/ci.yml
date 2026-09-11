@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.16.6
+      - run: ruff check .
+
+  core:
+    name: ygg-core (tests + mypy)
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: packages/ygg-core
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: packages/ygg-core/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: mypy
+      # Sin Postgres ni Redis: el core no los necesita.
+      - run: pytest -q
+
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ygg
+          POSTGRES_PASSWORD: ygg
+          POSTGRES_DB: ygg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ygg -d ygg_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql://ygg:ygg@localhost:5432/ygg_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-at-least-32-bytes-long
+      RIOT_API_KEY: RGAPI-ci-placeholder
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            apps/api/requirements.txt
+            packages/ygg-core/pyproject.toml
+      - run: pip install -e ../../packages/ygg-core -r requirements.txt
+      - run: alembic upgrade head
+      - run: pytest -q
+
+  web:
+    name: Web (lint, types, tests, build, e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      # El cliente se genera desde apps/api/openapi.json: si la API cambia y nadie regenera, falla aquí.
+      - name: API types match openapi.json
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.d.ts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Initial JS budget (< 200 KB gzip)
+        run: node scripts/bundle-budget.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

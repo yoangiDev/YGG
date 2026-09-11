@@ -1,0 +1,88 @@
+# Entorno local completo:  make up   (o: docker compose -f infra/docker-compose.yml up -d --build)
+name: ygg
+
+x-api-environment: &api-environment
+  ENVIRONMENT: development
+  DATABASE_URL: postgresql://ygg:ygg@postgres:5432/ygg
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY:-solo-para-desarrollo-local-no-usar-en-produccion}
+  RIOT_API_KEY: ${RIOT_API_KEY:-}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+  JOB_BACKEND: arq
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ygg
+      POSTGRES_PASSWORD: ygg
+      POSTGRES_DB: ygg
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ygg -d ygg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    environment: *api-environment
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Ejecuta los análisis. Se puede matar a mitad: el job se marca como
+  # interrumpido por falta de heartbeat y se reintenta, sin afectar a la API.
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    command: ["arq", "app.jobs.worker.WorkerSettings"]
+    environment: *api-environment
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy  # la API aplica las migraciones al arrancar
+      redis:
+        condition: service_healthy
+
+  # Cliente React en http://localhost:5173 (el origen que admite CORS_ORIGINS por defecto).
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

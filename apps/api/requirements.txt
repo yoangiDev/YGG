@@ -1,0 +1,43 @@
+# El motor de análisis se instala aparte:
+#   pip install -e ../../packages/ygg-core
+
+# ── Web ───────────────────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32           # UploadFile (avatar)
+
+# ── Base de datos ─────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.52
+asyncpg==0.31.0                    # driver asíncrono de la aplicación
+psycopg2-binary==2.9.13            # driver síncrono de Alembic y scripts de mantenimiento
+alembic==1.19.2
+
+# ── Validación y configuración ────────────────────────────────────────────────
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+python-dotenv==1.0.1
+
+# ── Autenticación ─────────────────────────────────────────────────────────────
+pyjwt==2.13.0
+bcrypt==5.0.0
+
+# ── Redis: caché, rate limiting y cola ────────────────────────────────────────
+redis==5.3.1                       # la versión que admite arq
+fakeredis==2.38.0                  # REDIS_URL=memory:// en local y tests sin Redis
+arq==0.28.0                        # cola de trabajos y worker
+sse-starlette==3.4.11              # progreso de los análisis por Server-Sent Events
+
+# ── Observabilidad ────────────────────────────────────────────────────────────
+structlog==26.1.0
+sentry-sdk==2.69.1
+prometheus-fastapi-instrumentator==8.1.0
+
+# ── Riot API / HTTP ───────────────────────────────────────────────────────────
+aiohttp==3.10.5
+certifi==2024.8.30
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1                      # TestClient
