@@ -69,6 +69,12 @@ def test_references_and_weights_cover_every_metric(role):
     assert sum(SCORE_WEIGHTS[role].values()) == pytest.approx(1)
 
 
+@pytest.mark.parametrize("role", DASHBOARD_ROLES)
+def test_deaths_weigh_more_than_anything_else(role):
+    weights = SCORE_WEIGHTS[role]
+    assert all(weights["deaths"] > weight for metric, weight in weights.items() if metric != "deaths")
+
+
 def test_metric_score_is_70_at_the_centre_and_moves_15_points_per_range():
     kills = (4.5, 5.5)
     assert metric_score("kills", 5.0, kills) == 70
