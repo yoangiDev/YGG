@@ -1,0 +1,54 @@
+# --- Virtual environments (the folder with the libraries) ---
+env/
+venv/
+.venv/
+**/[Ee]nv/
+**/[Vv]env/
+
+# --- Environment variables (your secrets and keys) ---
+.env
+**/.env
+!.env.example
+
+# --- Unneeded Python files ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Cache files created when running the app ---
+apps/api/data/
+.ygg/
+*.duckdb
+*.duckdb.wal
+
+# --- Logs and local databases
+*.log
+*.sqlite
+.pgdata/
+
+# --- Node / web
+node_modules/
+dist/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/.vite/
+
+# --- Research data (ladder downloads, hundreds of MB)
+research/ladder/data/
+apps/web/.preview/
+
+# --- Test coverage
+coverage/
+dump.rdb
+
+# --- Development tools and local data that are not part of the project
+.claude/
+graphify-out/
+# List of real ladder players: start from roster.example.json
+research/ladder/roster.json

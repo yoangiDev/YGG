@@ -1,0 +1,11 @@
+* text=auto
+*.sh text eol=lf
+Makefile text eol=lf
+
+*.png binary
+*.ico binary
+*.ttf binary
+*.webp binary
+*.avif binary
+*.parquet binary
+*.duckdb binary

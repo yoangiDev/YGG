@@ -1,0 +1,44 @@
+import os
+
+# Before importing the app: the tests never write to the development DB (in CI ygg_test is already set).
+os.environ.setdefault("DATABASE_URL", "postgresql://ygg:ygg@localhost:5432/ygg_test")
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.config import settings
+from app.db.session import SessionLocal
+from main import app
+from tests.helpers import unique
+
+
+@pytest.fixture(autouse=True)
+def _rate_limits_off(monkeypatch):
+    """All the tests share an IP ("testclient"): the limits are only activated where they are tested."""
+    monkeypatch.setattr(settings, "rate_limit_enabled", False)
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+@pytest.fixture
+async def db():
+    async with SessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
+def auth_token(client):
+    name = unique("pytest")
+    response = client.post(
+        "/auth/register",
+        json={"email": f"{name}@example.com", "username": name, "password": "password123"},
+    )
+    return response.json()["access_token"]
+
+
+@pytest.fixture
+def auth_headers(auth_token):
+    return {"Authorization": f"Bearer {auth_token}"}

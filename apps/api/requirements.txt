@@ -1,0 +1,45 @@
+# The analysis engine is installed separately:
+#   pip install -e ../../packages/ygg-core
+
+# ── Web ───────────────────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+
+# ── Database ─────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.52
+asyncpg==0.31.0                    # the application's async driver
+psycopg2-binary==2.9.13            # sync driver for Alembic and maintenance scripts
+alembic==1.19.2
+
+# ── Validation and configuration ────────────────────────────────────────────────
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+python-dotenv==1.0.1
+
+# ── Authentication ─────────────────────────────────────────────────────────────
+pyjwt==2.13.0
+bcrypt==5.0.0
+
+# ── Redis: cache, rate limiting and queue ────────────────────────────────────────
+redis==5.3.1                       # the version arq supports
+fakeredis==2.38.0                  # REDIS_URL=memory:// locally and in tests without Redis
+arq==0.28.0                        # job queue and worker
+sse-starlette==3.4.11              # analysis progress over Server-Sent Events
+
+# ── Replay analysis ───────────────────────────────────────────────────────────
+anthropic==1.9.0                   # Claude's review (only called when analysing a replay)
+
+# ── Observability ────────────────────────────────────────────────────────────
+structlog==26.1.0
+sentry-sdk==2.69.1
+prometheus-fastapi-instrumentator==8.1.0
+
+# ── Riot API / HTTP ───────────────────────────────────────────────────────────
+aiohttp==3.10.5
+certifi==2024.8.30
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1                      # TestClient

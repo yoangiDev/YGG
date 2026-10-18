@@ -1,0 +1,5 @@
+game,jungler,team,path,wins,bot_wave1,bot_wave2,mid_wave1,mid_wave2,top_wave1,top_wave2
+EUW1-7986939564,JarvanIV,100,bot,False,-0.088,-0.133,0.025,-0.001,-0.113,-0.069
+EUW1-7986939564,Aatrox,200,bot,True,-0.088,-0.133,0.025,-0.001,-0.113,-0.069
+EUW1-7987045761,RekSai,100,top,False,0.063,0.182,0.007,-0.011,0.032,0.133
+EUW1-7987045761,Sylas,200,bot,True,0.063,0.182,0.007,-0.011,0.032,0.133

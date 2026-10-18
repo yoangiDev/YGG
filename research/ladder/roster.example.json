@@ -1,0 +1,22 @@
+{
+  "TOP": [
+    "GameName#TAG1",
+    "GameName#TAG2"
+  ],
+  "JUNGLE": [
+    "GameName#TAG3",
+    "GameName#TAG4"
+  ],
+  "MID": [
+    "GameName#TAG5",
+    "GameName#TAG6"
+  ],
+  "ADC": [
+    "GameName#TAG7",
+    "GameName#TAG8"
+  ],
+  "SUPPORT": [
+    "GameName#TAG9",
+    "GameName#TAG10"
+  ]
+}

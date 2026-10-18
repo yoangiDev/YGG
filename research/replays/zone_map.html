@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map zones</title>
+<style>
+  :root { --bg:#0f1218; --panel:#171b23; --line:#2a303c; --text:#e6e9ef; --dim:#8b93a3; --accent:#5aa9ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, sans-serif; display:flex; height:100vh; }
+  aside { width:420px; flex:none; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; }
+  aside header { padding:12px 14px; border-bottom:1px solid var(--line); }
+  aside h1 { font-size:15px; margin:0 0 4px; }
+  aside p { margin:0; color:var(--dim); font-size:12px; }
+  #list { flex:1; overflow:auto; padding:6px; }
+  .zone { display:grid; grid-template-columns:14px 1fr 76px auto; gap:6px; align-items:center; padding:5px 6px; border-radius:6px; border:1px solid transparent; cursor:pointer; }
+  .zone:hover { background:#1e2430; }
+  .zone.sel { border-color:var(--accent); background:#1a2332; }
+  .zone.winning { box-shadow: inset 3px 0 0 #ffd24a; }
+  .zone.hidden i, .zone.hidden input { opacity:.35; }
+  .zone i { width:12px; height:12px; border-radius:3px; display:block; }
+  .zone input, .zone select { width:100%; background:#0f1218; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:3px 6px; font:inherit; }
+  button { background:#222938; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:3px 7px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--accent); }
+  button.active { background:var(--accent); color:#06121f; border-color:var(--accent); font-weight:600; }
+  .zone .eye.off { opacity:.35; }
+  .bar { padding:10px 12px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .bar .save { background:var(--accent); color:#06121f; border:0; font-weight:600; padding:6px 14px; }
+  #status { color:var(--dim); font-size:12px; }
+  #status.dirty { color:#ffd24a; }
+  main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #tools { padding:8px 16px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  #tools .sep { width:1px; height:22px; background:var(--line); margin:0 6px; }
+  #tools span.hint { color:var(--dim); font-size:12px; margin-left:6px; }
+  #reading { padding:8px 16px; border-bottom:1px solid var(--line); background:var(--panel); min-height:40px; display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
+  #reading b { color:var(--accent); font-weight:600; }
+  #canvas { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; }
+  svg { height:100%; max-width:100%; aspect-ratio: 14990 / 15100; background:#0a0d12; border:1px solid var(--line); border-radius:6px; touch-action:none; }
+  svg.drawing { cursor:crosshair; }
+  .poly { stroke-width:calc(30px * var(--k)); cursor:pointer; }
+  .poly.sel { stroke-width:calc(60px * var(--k)); }
+  svg.drawing .poly { cursor:crosshair; }
+  .handle { fill:#fff; stroke:#06121f; stroke-width:calc(30px * var(--k)); cursor:grab; }
+  .midpoint { fill:#06121f; stroke:#fff; stroke-width:calc(24px * var(--k)); cursor:copy; opacity:.8; }
+  .label.hidden { display:none; }
+  .label { fill:#fff; font-size:calc(330px * var(--k)); font-weight:600; text-anchor:middle; paint-order:stroke; stroke:#000; stroke-width:calc(70px * var(--k)); stroke-linejoin:round; pointer-events:none; }
+  .preview { fill:rgba(255,255,255,.18); stroke:#fff; stroke-width:calc(40px * var(--k)); stroke-dasharray:calc(140px * var(--k)) calc(90px * var(--k)); pointer-events:none; }
+  svg { --k:1; }
+  details { margin:6px; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1 id="title">Map zones</h1>
+    <p id="subtitle">The list is the priority: the first zone that contains a point names it.</p>
+    <p><a id="switch-link" href="#"></a></p>
+  </header>
+  <details>
+    <summary>How to edit</summary>
+    <ul>
+      <li>Pick a shape (rectangle, ellipse, triangle, diamond) and drag on the map, or use Polygon and click the corners (double-click, Enter or the first point closes it, Esc cancels).</li>
+      <li>Then select the zone and drag its white dots to reshape it; double-click a dot to remove the corner; click a dark dot (middle of an edge) to add one.</li>
+      <li>The eye hides a zone on the map only (it still names places). ▲ ▼ change the priority.</li>
+      <li>A zone with a side reads "your …" for that team and "the enemy …" for the other.</li>
+    </ul>
+  </details>
+  <div id="list"></div>
+  <div class="bar">
+    <button id="save" class="save">Save</button>
+    <span id="status"></span>
+  </div>
+</aside>
+<main>
+  <div id="tools">
+    <button data-h="select" class="active" title="Select and reshape (V)">Select</button>
+    <span class="sep"></span>
+    <button data-h="rect" title="Rectangle">▭ Rectangle</button>
+    <button data-h="ellipse" title="Ellipse">◯ Ellipse</button>
+    <button data-h="triangle" title="Triangle">△ Triangle</button>
+    <button data-h="diamond" title="Diamond">◇ Diamond</button>
+    <button data-h="polygon" title="Polygon: click the corners">⬠ Polygon</button>
+    <span class="sep"></span>
+    <button id="fit" title="Show the whole map (wheel = zoom, right-drag or drag the background = pan)">Fit</button>
+    <button id="hide-all">Hide all</button>
+    <button id="show-all">Show all</button>
+    <span class="hint" id="hint"></span>
+  </div>
+  <div id="reading">Move the mouse over the map.</div>
+  <div id="canvas">
+    <svg id="map" viewBox="-120 -14980 14990 15100"></svg>
+  </div>
+</main>
+<script>
+const X0 = -120, X1 = 14870, Z0 = -120, Z1 = 14980;
+const IMG = "https://raw.communitydragon.org/16.19/game/assets/maps/info/map11/2dlevelminimap_base_baron1.png";
+const NS = "http://www.w3.org/2000/svg";
+const HINTS = { select: "", rect: "Drag on the map.", ellipse: "Drag on the map.", triangle: "Drag on the map.", diamond: "Drag on the map.",
+  polygon: "Click the corners; double-click, Enter or the first point closes. Esc cancels." };
+const MAP = new URLSearchParams(location.search).get("map") === "bushes" ? "bushes" : "zones";
+const VIEW0 = [X0, -Z1, X1 - X0, Z1 - Z0];
+let view = [...VIEW0];
+let zones = [], sel = -1, dirty = false, winning = -1, tool = "select", hiddenIds = new Set(), preview = null, pts = [];
+
+const color = id => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 75% 55%)`; };
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent?.appendChild(e); return e; };
+// on the bush map the points snap to the corners of the 50-unit cells (x = -1.105 + 50·k, z = 32.756 + 50·k): that way the outline
+// follows the bush's edge exactly; on the zones map, to multiples of 10
+const GRID = { x: -1.105, z: 32.756, step: 50 };
+const rx = v => MAP === "bushes" ? Math.round((GRID.x + Math.round((v - GRID.x) / GRID.step) * GRID.step) * 100) / 100 : Math.round(v / 10) * 10;
+const rz = v => MAP === "bushes" ? Math.round((GRID.z + Math.round((v - GRID.z) / GRID.step) * GRID.step) * 100) / 100 : Math.round(v / 10) * 10;
+const svg = document.getElementById("map");
+const K = () => view[2] / VIEW0[2];  // 1 with the whole map in view, less the more zoom
+
+function inside(x, z, poly) {
+  let d = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [x1, z1] = poly[i], [x2, z2] = poly[j];
+    if ((z1 > z) !== (z2 > z) && x < x1 + (z - z1) / (z2 - z1) * (x2 - x1)) d = !d;
+  }
+  return d;
+}
+const zoneAt = (x, z) => zones.findIndex(q => inside(x, z, q.polygon));
+const nameFor = (q, team) => q.side === null ? q.name : `${(q.side === "blue") === (team === "100") ? "your" : "the enemy"} ${q.name}`;
+const reads = (x, z) => { const i = zoneAt(x, z); return i < 0 ? ["the map", "the map"] : [nameFor(zones[i], "100"), nameFor(zones[i], "200")]; };
+const labelOf = q => q.name + (q.side ? ` · ${q.side}` : "");
+
+function centroid(poly) {
+  let a = 0, cx = 0, cz = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [x1, z1] = poly[j], [x2, z2] = poly[i], f = x1 * z2 - x2 * z1;
+    a += f; cx += (x1 + x2) * f; cz += (z1 + z2) * f;
+  }
+  if (Math.abs(a) < 1) return [poly.reduce((s, p) => s + p[0], 0) / poly.length, poly.reduce((s, p) => s + p[1], 0) / poly.length];
+  return [cx / (3 * a), cz / (3 * a)];
+}
+
+function markDirty(v = true) {
+  dirty = v;
+  const e = document.getElementById("status");
+  e.textContent = v ? "Unsaved changes" : "Saved";
+  e.className = v ? "dirty" : "";
+}
+
+// on the bush map only the chosen one is labelled, the one under the mouse and those that already have their own name (not "bush 12")
+const nameVisible = (q, i) => MAP !== "bushes" || i === sel || !/^bush \d+$/.test(q.name);
+
+function selectZone(i, zoomTo = false) {
+  if (i >= 0) hiddenIds.delete(zones[i].id);
+  sel = i;
+  if (zoomTo && MAP === "bushes" && i >= 0) {  // when it is chosen in the list, the map zooms to it
+    const [cx, cz] = centroid(zones[i].polygon), w = 3500;
+    view = [cx - w / 2, -cz - w * VIEW0[3] / VIEW0[2] / 2, w, w * VIEW0[3] / VIEW0[2]];
+    clampView();
+  }
+  draw(); renderList();
+}
+
+function draw() {
+  svg.replaceChildren();
+  preview = null;
+  svg.setAttribute("viewBox", view.join(" "));
+  svg.style.setProperty("--k", K());
+  svg.classList.toggle("drawing", tool !== "select");
+  if (MAP === "bushes") {  // the background is the decoder's grid (8 px per 50-unit cell) with its bushes in green: what is drawn on top lands exactly in place
+    el("image", { href: "/background.png", x: -1.105, y: -(32.756 + 296 * 50), width: 295 * 50, height: 296 * 50, preserveAspectRatio: "none", style: "image-rendering:pixelated" }, svg);
+  } else {
+    el("image", { href: IMG, x: X0, y: -Z1, width: X1 - X0, height: Z1 - Z0, opacity: .9 }, svg);
+  }
+  // the first zone in the list rules: the last is drawn first so that the first ends up on top
+  [...zones.keys()].reverse().forEach(i => {
+    const q = zones[i];
+    if (hiddenIds.has(q.id)) return;
+    const bush = MAP === "bushes";  // bushes go in strong green, as on the decoder's map
+    const c = bush ? (i === sel ? "#ffffff" : "#ff2d95") : color(q.id);
+    const p = el("polygon", { points: q.polygon.map(([x, z]) => `${x},${-z}`).join(" "), class: "poly" + (i === sel ? " sel" : ""),
+      fill: c, "fill-opacity": bush ? .3 : (i === sel ? .45 : .16), stroke: bush ? (i === sel ? "#fff" : "#ff2d95") : (i === sel ? "#fff" : c) }, svg);
+    p.addEventListener("pointerdown", e => { if (e.button === 0 && tool === "select") selectZone(i); });
+    p.addEventListener("pointerenter", () => document.querySelector(`.label[data-id="${q.id}"]`)?.classList.remove("hidden"));
+    p.addEventListener("pointerleave", () => { if (!nameVisible(q, i)) document.querySelector(`.label[data-id="${q.id}"]`)?.classList.add("hidden"); });
+  });
+  zones.forEach((q, i) => {
+    if (hiddenIds.has(q.id)) return;
+    const [cx, cz] = centroid(q.polygon);
+    el("text", { x: cx, y: -cz, class: "label" + (nameVisible(q, i) ? "" : " hidden"), "data-id": q.id }, svg).textContent = labelOf(q);
+  });
+  if (sel >= 0 && tool === "select" && !hiddenIds.has(zones[sel].id)) {
+    const poly = zones[sel].polygon;
+    poly.forEach((a, k) => {
+      const b = poly[(k + 1) % poly.length];
+      const m = el("circle", { cx: (a[0] + b[0]) / 2, cy: -(a[1] + b[1]) / 2, r: 85 * K(), class: "midpoint" }, svg);
+      m.addEventListener("pointerdown", e => { e.stopPropagation(); poly.splice(k + 1, 0, [rx((a[0] + b[0]) / 2), rz((a[1] + b[1]) / 2)]); markDirty(); draw(); });
+    });
+    poly.forEach((a, k) => {
+      const h = el("circle", { cx: a[0], cy: -a[1], r: 120 * K(), class: "handle" }, svg);
+      h.addEventListener("pointerdown", e => { e.stopPropagation(); h.dataset.dragging = 1; try { h.setPointerCapture(e.pointerId); } catch { /* no active pointer */ } });
+      h.addEventListener("pointermove", e => {
+        if (!h.dataset.dragging) return;
+        const [x, z] = toGame(e);
+        a[0] = rx(x); a[1] = rz(z);
+        h.setAttribute("cx", a[0]); h.setAttribute("cy", -a[1]);
+        svg.querySelector("polygon.sel").setAttribute("points", poly.map(([px, pz]) => `${px},${-pz}`).join(" "));
+        markDirty();
+      });
+      h.addEventListener("pointerup", () => { delete h.dataset.dragging; draw(); });
+      h.addEventListener("dblclick", () => { if (poly.length > 3) { poly.splice(k, 1); markDirty(); draw(); } });
+    });
+  }
+}
+
+function toGame(e) {
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+  return [q.x, -q.y];
+}
+
+function showReading(x, z) {
+  const [blue, red] = reads(x, z);
+  winning = zoneAt(x, z);
+  document.getElementById("reading").innerHTML =
+    `<span>x <b>${Math.round(x)}</b> · z <b>${Math.round(z)}</b></span><span>Blue team reads: <b>${blue}</b></span><span>Red team reads: <b>${red}</b></span>`;
+  document.querySelectorAll(".zone").forEach((r, i) => r.classList.toggle("winning", i === winning));
+}
+
+function renderList() {
+  const container = document.getElementById("list");
+  container.replaceChildren();
+  zones.forEach((q, i) => {
+    const r = document.createElement("div");
+    r.className = "zone" + (i === sel ? " sel" : "") + (hiddenIds.has(q.id) ? " hidden" : "");
+    r.innerHTML = `<i style="background:${color(q.id)}"></i><input value="${q.name.replace(/"/g, "&quot;")}">` +
+      `<select><option value="">no side</option><option value="blue">blue</option><option value="red">red</option></select>` +
+      `<span><button class="eye${hiddenIds.has(q.id) ? " off" : ""}" title="Show / hide on the map (view only)">👁</button>` +
+      `<button title="Higher priority">▲</button><button title="Lower priority">▼</button><button title="Delete">✕</button></span>`;
+    const [nameInput, sideSelect] = [r.querySelector("input"), r.querySelector("select")];
+    sideSelect.value = q.side ?? "";
+    nameInput.addEventListener("input", () => { q.name = nameInput.value; markDirty(); document.querySelectorAll("#map .label").forEach(t => { if (t.dataset.id === q.id) t.textContent = labelOf(q); }); });
+    nameInput.addEventListener("focus", () => { if (sel !== i) { selectZone(i, true); document.querySelectorAll(".zone")[i].querySelector("input").focus(); } });
+    sideSelect.addEventListener("change", () => { q.side = sideSelect.value || null; markDirty(); draw(); });
+    const [eye, up, down, remove] = r.querySelectorAll("button");
+    const move = d => { const j = i + d; if (j < 0 || j >= zones.length) return; [zones[i], zones[j]] = [zones[j], zones[i]]; sel = j; markDirty(); draw(); renderList(); };
+    eye.addEventListener("click", e => { e.stopPropagation(); hiddenIds.has(q.id) ? hiddenIds.delete(q.id) : hiddenIds.add(q.id); draw(); renderList(); });
+    up.addEventListener("click", e => { e.stopPropagation(); move(-1); });
+    down.addEventListener("click", e => { e.stopPropagation(); move(1); });
+    remove.addEventListener("click", e => { e.stopPropagation(); if (confirm(`Delete "${q.name}"?`)) { zones.splice(i, 1); sel = -1; markDirty(); draw(); renderList(); } });
+    r.addEventListener("click", () => { if (sel !== i) selectZone(i, true); });
+    container.appendChild(r);
+  });
+}
+
+// ── drawing shapes: a rectangle is dragged and the shape fits into it ──
+const SHAPES = {
+  rect: (a, b) => [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]],
+  diamond: (a, b) => { const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; return [[mx, a[1]], [b[0], mz], [mx, b[1]], [a[0], mz]]; },
+  triangle: (a, b) => [[(a[0] + b[0]) / 2, b[1]], [b[0], a[1]], [a[0], a[1]]],
+  ellipse: (a, b) => { const cx = (a[0] + b[0]) / 2, cz = (a[1] + b[1]) / 2, rx = Math.abs(b[0] - a[0]) / 2, rz = Math.abs(b[1] - a[1]) / 2;
+    return Array.from({ length: 16 }, (_, i) => [cx + rx * Math.cos(Math.PI * i / 8), cz + rz * Math.sin(Math.PI * i / 8)]); },
+};
+
+function newZone(polygon) {
+  polygon = polygon.map(([x, z]) => [rx(x), rz(z)]).filter((p, k, t) => k === 0 || p[0] !== t[k - 1][0] || p[1] !== t[k - 1][1]);
+  if (polygon.length < 3) return setTool("select");  // snapping to the grid left the shape as a line
+  let n = 1; while (zones.some(q => q.id === `new-${n}`)) n++;
+  zones.unshift({ id: `new-${n}`, name: MAP === "bushes" ? "new bush" : "new zone", side: null, polygon });
+  markDirty(); setTool("select"); selectZone(0);
+  const nameInput = document.querySelector(".zone input"); nameInput.focus(); nameInput.select();
+}
+
+function setTool(h) {
+  tool = h; pts = []; sel = h === "select" ? sel : -1;
+  document.querySelectorAll("#tools [data-h]").forEach(b => b.classList.toggle("active", b.dataset.h === h));
+  document.getElementById("hint").textContent = HINTS[h];
+  draw(); renderList();
+}
+
+function closePolygon() {
+  if (pts.length >= 3) newZone(pts); else setTool("polygon");
+}
+
+let start = null;
+svg.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || tool === "select") return;
+  const p = toGame(e);
+  if (tool === "polygon") {
+    if (pts.length >= 3 && Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1]) < 250 * K()) return closePolygon();
+    pts.push(p); paintPreview(p);
+    return;
+  }
+  start = p;
+  try { svg.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
+});
+svg.addEventListener("dblclick", () => { if (tool === "polygon") { pts.pop(); closePolygon(); } });
+svg.addEventListener("pointermove", e => {
+  const p = toGame(e);
+  showReading(...p);
+  if (start) paintPreview(p); else if (tool === "polygon" && pts.length) paintPreview(p);
+});
+svg.addEventListener("pointerup", e => {
+  if (!start) return;
+  const [a, b] = [start, toGame(e)]; start = null;
+  if (Math.abs(b[0] - a[0]) < 200 * K() || Math.abs(b[1] - a[1]) < 200 * K()) return draw();  // a click without dragging isn't a shape
+  newZone(SHAPES[tool](a, b));
+});
+function paintPreview(p) {
+  preview?.remove();
+  const corners = start ? SHAPES[tool](start, p) : [...pts, p];
+  preview = el("polygon", { points: corners.map(([x, z]) => `${x},${-z}`).join(" "), class: "preview" }, svg);
+}
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "Escape") { start = null; setTool("select"); }
+  else if (e.key === "Enter" && tool === "polygon") closePolygon();
+  else if (e.key.toLowerCase() === "v") setTool("select");
+});
+
+
+// ── zoom with the wheel and panning (right button or dragging the background) ──
+function clampView() {
+  view[2] = Math.min(Math.max(view[2], 1200), VIEW0[2]); view[3] = view[2] * VIEW0[3] / VIEW0[2];
+  view[0] = Math.min(Math.max(view[0], VIEW0[0]), VIEW0[0] + VIEW0[2] - view[2]);
+  view[1] = Math.min(Math.max(view[1], VIEW0[1]), VIEW0[1] + VIEW0[3] - view[3]);
+}
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const [gx, gz] = toGame(e), r = e.deltaY < 0 ? 0.8 : 1.25;
+  view = [gx - (gx - view[0]) * r, -gz - (-gz - view[1]) * r, view[2] * r, view[3] * r];
+  clampView(); draw();
+}, { passive: false });
+let panning = null;
+svg.addEventListener("contextmenu", e => e.preventDefault());
+svg.addEventListener("pointerdown", e => {
+  if (e.button === 2 || e.button === 1 || (e.button === 0 && tool === "select" && e.target.tagName === "image")) {
+    panning = { x: e.clientX, y: e.clientY, v: [...view] };
+    try { svg.setPointerCapture(e.pointerId); } catch { /* no active pointer */ }
+  }
+});
+svg.addEventListener("pointermove", e => {
+  if (!panning) return;
+  const box = svg.getBoundingClientRect(), u = view[2] / box.width;
+  view[0] = panning.v[0] - (e.clientX - panning.x) * u; view[1] = panning.v[1] - (e.clientY - panning.y) * u;
+  clampView(); svg.setAttribute("viewBox", view.join(" "));
+});
+svg.addEventListener("pointerup", () => { if (panning) { panning = null; draw(); } });
+document.getElementById("fit").addEventListener("click", () => { view = [...VIEW0]; draw(); });
+
+document.querySelectorAll("#tools [data-h]").forEach(b => b.addEventListener("click", () => setTool(b.dataset.h)));
+document.getElementById("hide-all").addEventListener("click", () => { zones.forEach(q => hiddenIds.add(q.id)); sel = -1; draw(); renderList(); });
+document.getElementById("show-all").addEventListener("click", () => { hiddenIds.clear(); draw(); renderList(); });
+document.getElementById("save").addEventListener("click", async () => {
+  const r = await fetch(`/save?map=${MAP}`, { method: "POST", body: JSON.stringify({ zones }) });
+  if (r.ok) markDirty(false); else alert(await r.text());
+});
+window.addEventListener("beforeunload", e => { if (dirty) e.preventDefault(); });
+
+(async () => {
+  if (MAP === "bushes") {
+    document.getElementById("title").textContent = "Bushes";
+    document.getElementById("subtitle").textContent = "The decoder's map, bushes in green. Draw each bush with the shapes (points snap to the cells), then name it.";
+    document.title = "Bushes";
+  }
+  const other = document.getElementById("switch-link");
+  other.textContent = MAP === "bushes" ? "← Zones map" : "Bushes map →";
+  other.href = MAP === "bushes" ? "/" : "/?map=bushes";
+  other.style.color = "var(--accent)";
+  zones = (await (await fetch(`/data?map=${MAP}`)).json()).zones;
+  draw(); renderList();
+})();
+</script>
+</body>
+</html>

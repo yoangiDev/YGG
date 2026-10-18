@@ -1,0 +1,6 @@
+# What the API needs to analyse replays (the research/replays modules that the worker loads).
+# Separate from requirements.txt on purpose: the Docker image doesn't analyse replays (the decoder is external)
+# and this way it doesn't carry numpy or DuckDB. To work locally with replays:
+#   pip install -r requirements.txt -r requirements-replays.txt
+numpy==2.5.4
+duckdb==1.5.6

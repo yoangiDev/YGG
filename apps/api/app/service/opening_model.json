@@ -1,0 +1,694 @@
+{
+ "features": [
+  "gold_now",
+  "gold_30",
+  "gold_rival",
+  "crab",
+  "objective",
+  "rival_touched",
+  "rival_no_flash",
+  "rivals_alive",
+  "allies_alive",
+  "health_ally",
+  "ult_ally",
+  "priority",
+  "lane_gold",
+  "rival_seen",
+  "rival_clean",
+  "blue"
+ ],
+ "mean": [
+  0.05367,
+  0.10195,
+  0.015673,
+  0.020491,
+  -0.386573,
+  0.035631,
+  -0.621111,
+  -0.979192,
+  -0.954897,
+  -0.097088,
+  -0.773332,
+  0.001173,
+  0.036367,
+  -0.097535,
+  -0.058393,
+  0.496626
+ ],
+ "scale": [
+  1.303281,
+  1.42895,
+  1.236613,
+  0.681997,
+  0.578105,
+  0.327807,
+  0.892842,
+  0.393129,
+  0.430943,
+  0.388652,
+  0.807263,
+  0.135331,
+  1.702849,
+  0.6859,
+  0.974664,
+  0.499989
+ ],
+ "until": 14.0,
+ "weights": [
+  [
+   0.31212,
+   0.503217,
+   1.832353,
+   0.161415,
+   0.346177,
+   0.346514,
+   0.143581,
+   -0.131683,
+   0.111799,
+   0.020339,
+   -0.084041,
+   -0.047549,
+   -0.153424,
+   0.013614,
+   0.032792,
+   0.033178,
+   0.154918
+  ]
+ ],
+ "leagues": [
+  "CHALLENGER",
+  "GRANDMASTER"
+ ],
+ "clear": 0.2,
+ "agreement": {
+  "GOLD": {
+   "all": 0.8497,
+   "winners": 0.8583,
+   "losers": 0.8416
+  },
+  "PLATINUM": {
+   "all": 0.8645,
+   "winners": 0.8705,
+   "losers": 0.8587
+  },
+  "EMERALD": {
+   "all": 0.8771,
+   "winners": 0.8818,
+   "losers": 0.8727
+  },
+  "DIAMOND": {
+   "all": 0.8839,
+   "winners": 0.8829,
+   "losers": 0.885
+  },
+  "MASTER": {
+   "all": 0.8912,
+   "winners": 0.8987,
+   "losers": 0.8841
+  },
+  "GRANDMASTER": {
+   "all": 0.8914,
+   "winners": 0.8969,
+   "losers": 0.8865
+  },
+  "CHALLENGER": {
+   "all": 0.9001,
+   "winners": 0.8954,
+   "losers": 0.9044
+  }
+ },
+ "follow": {
+  "gold": {
+   "matches": 630.32,
+   "no": 612.27,
+   "interval": [
+    11.2,
+    24.46
+   ]
+  },
+  "wp": {
+   "matches": -0.92,
+   "no": -1.41,
+   "interval": [
+    0.15,
+    0.84
+   ]
+  },
+  "dies_pp": {
+   "matches": 18.73,
+   "no": 24.64,
+   "interval": [
+    -7.08,
+    -4.77
+   ]
+  }
+ },
+ "support": {
+  "features": [
+   "botlane_wave",
+   "botlane_minions",
+   "crash",
+   "crash_rival",
+   "freeze_rival",
+   "slowpush_rival",
+   "adc_in_lane",
+   "adc_health",
+   "adc_advance",
+   "botlane_rivals",
+   "bot_health_rival",
+   "mid_wave",
+   "mid_rival_touched",
+   "mid_health_ally",
+   "mid_no_flash_rival",
+   "dragon",
+   "above",
+   "rival_seen_bot",
+   "rival_seen_mid",
+   "jungler_mid",
+   "has_support_item",
+   "minute",
+   "after_dying",
+   "gold_team",
+   "gold_botlane",
+   "blue"
+  ],
+  "mean": [
+   0.488395,
+   -0.206637,
+   0.209334,
+   0.144934,
+   0.016002,
+   0.337628,
+   0.771528,
+   0.805511,
+   59174517983.18524,
+   1.525007,
+   0.829397,
+   0.498391,
+   0.201502,
+   0.732029,
+   0.547075,
+   0.574464,
+   0.186131,
+   0.379854,
+   0.098547,
+   0.144539,
+   0.599343,
+   8.459554,
+   0.407775,
+   -0.147242,
+   -0.100996,
+   0.504517
+  ],
+  "scale": [
+   0.098527,
+   0.732112,
+   0.406833,
+   0.352034,
+   0.125481,
+   0.472901,
+   0.419848,
+   0.317603,
+   93889962706011.25,
+   0.660945,
+   0.204649,
+   0.066917,
+   0.251105,
+   0.316677,
+   0.497779,
+   0.47211,
+   0.370731,
+   0.409015,
+   0.266432,
+   0.351636,
+   0.490032,
+   3.297111,
+   0.491421,
+   2.16516,
+   1.430321,
+   0.49998
+  ],
+  "weights": [
+   [
+    -0.297422,
+    0.230317,
+    0.28279,
+    -0.01048,
+    -0.006626,
+    -0.06319,
+    0.092062,
+    -0.147055,
+    -0.025794,
+    0.042185,
+    -0.455888,
+    -0.027432,
+    -0.043592,
+    0.016295,
+    -0.025466,
+    -0.037734,
+    -0.028937,
+    0.068461,
+    -0.084999,
+    0.059808,
+    0.02686,
+    -0.148289,
+    0.563745,
+    -0.022072,
+    0.023532,
+    -0.112398,
+    -0.137755
+   ]
+  ],
+  "leagues": [
+   "CHALLENGER",
+   "GRANDMASTER"
+  ],
+  "clear": 0.2,
+  "agreement": {
+   "GOLD": {
+    "all": 0.8319,
+    "winners": 0.8265,
+    "losers": 0.8369
+   },
+   "PLATINUM": {
+    "all": 0.8463,
+    "winners": 0.8428,
+    "losers": 0.85
+   },
+   "EMERALD": {
+    "all": 0.8334,
+    "winners": 0.8295,
+    "losers": 0.8371
+   },
+   "DIAMOND": {
+    "all": 0.8136,
+    "winners": 0.8092,
+    "losers": 0.818
+   },
+   "MASTER": {
+    "all": 0.7912,
+    "winners": 0.8048,
+    "losers": 0.7782
+   },
+   "GRANDMASTER": {
+    "all": 0.7856,
+    "winners": 0.7999,
+    "losers": 0.7718
+   },
+   "CHALLENGER": {
+    "all": 0.7692,
+    "winners": 0.7909,
+    "losers": 0.7461
+   }
+  },
+  "opens_mid": {
+   "GOLD": 0.1293,
+   "PLATINUM": 0.1598,
+   "EMERALD": 0.2076,
+   "DIAMOND": 0.2606,
+   "MASTER": 0.3772,
+   "GRANDMASTER": 0.4391,
+   "CHALLENGER": 0.4975
+  },
+  "by_botlane": {
+   "crash": {
+    "high": 0.4598,
+    "low": 0.1427,
+    "n": 8090,
+    "dies_mid": 26.6,
+    "dies_bot": 27.82,
+    "value": [
+     0.21,
+     -0.29,
+     0.72
+    ]
+   },
+   "pushed": {
+    "high": 0.5734,
+    "low": 0.2059,
+    "n": 7127,
+    "dies_mid": 28.2,
+    "dies_bot": 28.58,
+    "value": [
+     0.84,
+     0.44,
+     1.29
+    ]
+   },
+   "neutral": {
+    "high": 0.4407,
+    "low": 0.1564,
+    "n": 9972,
+    "dies_mid": 32.76,
+    "dies_bot": 30.53,
+    "value": [
+     0.06,
+     -0.35,
+     0.45
+    ]
+   },
+   "at their tower": {
+    "high": 0.4024,
+    "low": 0.1421,
+    "n": 4102,
+    "dies_mid": 35.53,
+    "dies_bot": 34.18,
+    "value": [
+     -0.37,
+     -1.14,
+     0.36
+    ]
+   },
+   "slowpush rival": {
+    "high": 0.3456,
+    "low": 0.0945,
+    "n": 11149,
+    "dies_mid": 30.93,
+    "dies_bot": 31.23,
+    "value": [
+     -0.68,
+     -1.21,
+     -0.22
+    ]
+   },
+   "freeze rival": {
+    "high": 0.3312,
+    "low": 0.0727,
+    "n": 640,
+    "dies_mid": 26.89,
+    "dies_bot": 26.87,
+    "value": [
+     -0.67,
+     -2.45,
+     0.89
+    ]
+   },
+   "without marksman": {
+    "high": 0.5234,
+    "low": 0.1546,
+    "n": 12165,
+    "dies_mid": 25.66,
+    "dies_bot": 23.56,
+    "value": [
+     0.73,
+     0.33,
+     1.08
+    ]
+   }
+  },
+  "death": {
+   "crash": {
+    "exposed": 40.2,
+    "tower": 31.5,
+    "n": 577
+   },
+   "pushed": {
+    "exposed": 44.7,
+    "tower": 29.0,
+    "n": 739
+   },
+   "neutral": {
+    "exposed": 30.7,
+    "tower": 39.8,
+    "n": 900
+   },
+   "at their tower": {
+    "exposed": 22.6,
+    "tower": 42.0,
+    "n": 367
+   },
+   "slowpush rival": {
+    "exposed": 25.1,
+    "tower": 51.0,
+    "n": 669
+   },
+   "freeze rival": {
+    "exposed": 50.0,
+    "tower": 18.8,
+    "n": 32
+   },
+   "without marksman": {
+    "exposed": 34.9,
+    "tower": 36.0,
+    "n": 959
+   }
+  },
+  "follow": {
+   "wp": {
+    "matches": -0.1,
+    "no": -0.93,
+    "interval": [
+     0.22,
+     1.45
+    ]
+   },
+   "dies_adc_pp": {
+    "matches": 31.13,
+    "no": 31.99,
+    "interval": [
+     -2.76,
+     1.2
+    ]
+   }
+  }
+ },
+ "roams": {
+  "crash": {
+   "roams": 1498,
+   "value_60": [
+    -2.32,
+    -2.9,
+    -1.69
+   ],
+   "dies_60": [
+    10.81,
+    7.5,
+    13.01
+   ],
+   "exposed": 49.2,
+   "tower": 25.0
+  },
+  "pushed": {
+   "roams": 3202,
+   "value_60": [
+    -1.38,
+    -1.75,
+    -1.07
+   ],
+   "dies_60": [
+    10.14,
+    7.95,
+    11.88
+   ],
+   "exposed": 69.3,
+   "tower": 14.1
+  },
+  "neutral": {
+   "roams": 4339,
+   "value_60": [
+    -1.75,
+    -2.08,
+    -1.45
+   ],
+   "dies_60": [
+    14.6,
+    13.1,
+    16.14
+   ],
+   "exposed": 36.9,
+   "tower": 28.4
+  },
+  "at their tower": {
+   "roams": 1451,
+   "value_60": [
+    -1.14,
+    -1.7,
+    -0.47
+   ],
+   "dies_60": [
+    14.41,
+    12.19,
+    17.98
+   ],
+   "exposed": 16.3,
+   "tower": 53.1
+  },
+  "slowpush rival": {
+   "roams": 1710,
+   "value_60": [
+    -1.71,
+    -2.17,
+    -1.13
+   ],
+   "dies_60": [
+    19.49,
+    16.91,
+    22.03
+   ],
+   "exposed": 18.6,
+   "tower": 56.3
+  },
+  "freeze rival": {
+   "roams": 264,
+   "value_60": [
+    -1.81,
+    -3.12,
+    -0.22
+   ],
+   "dies_60": [
+    26.55,
+    16.9,
+    33.88
+   ],
+   "exposed": 68.0,
+   "tower": 8.5
+  },
+  "all": {
+   "roams": 12464,
+   "value_60": [
+    -1.63,
+    -1.81,
+    -1.46
+   ],
+   "dies_60": [
+    13.5,
+    12.69,
+    14.33
+   ],
+   "exposed": 41.3,
+   "tower": 31.5
+  }
+ },
+ "objectives": {
+  "leagues": {
+   "GOLD": {
+    "JUNGLE": {
+     "prepares": 0.5189,
+     "other_takes": 0.2731,
+     "nothing": 0.208,
+     "winners": 0.5145,
+     "losers": 0.5241
+    },
+    "UTILITY": {
+     "prepares": 0.4596,
+     "other_takes": 0.3109,
+     "nothing": 0.2296,
+     "winners": 0.4725,
+     "losers": 0.4454
+    }
+   },
+   "PLATINUM": {
+    "JUNGLE": {
+     "prepares": 0.5187,
+     "other_takes": 0.2715,
+     "nothing": 0.2099,
+     "winners": 0.527,
+     "losers": 0.5091
+    },
+    "UTILITY": {
+     "prepares": 0.446,
+     "other_takes": 0.314,
+     "nothing": 0.2401,
+     "winners": 0.4669,
+     "losers": 0.4228
+    }
+   },
+   "EMERALD": {
+    "JUNGLE": {
+     "prepares": 0.5303,
+     "other_takes": 0.2577,
+     "nothing": 0.212,
+     "winners": 0.5325,
+     "losers": 0.5278
+    },
+    "UTILITY": {
+     "prepares": 0.476,
+     "other_takes": 0.289,
+     "nothing": 0.235,
+     "winners": 0.4925,
+     "losers": 0.4575
+    }
+   },
+   "DIAMOND": {
+    "JUNGLE": {
+     "prepares": 0.5171,
+     "other_takes": 0.2778,
+     "nothing": 0.2052,
+     "winners": 0.5161,
+     "losers": 0.5182
+    },
+    "UTILITY": {
+     "prepares": 0.4686,
+     "other_takes": 0.3142,
+     "nothing": 0.2172,
+     "winners": 0.484,
+     "losers": 0.4515
+    }
+   },
+   "MASTER": {
+    "JUNGLE": {
+     "prepares": 0.5105,
+     "other_takes": 0.2759,
+     "nothing": 0.2137,
+     "winners": 0.5038,
+     "losers": 0.5183
+    },
+    "UTILITY": {
+     "prepares": 0.4884,
+     "other_takes": 0.2993,
+     "nothing": 0.2123,
+     "winners": 0.5014,
+     "losers": 0.4739
+    }
+   },
+   "GRANDMASTER": {
+    "JUNGLE": {
+     "prepares": 0.5316,
+     "other_takes": 0.287,
+     "nothing": 0.1814,
+     "winners": 0.5315,
+     "losers": 0.5317
+    },
+    "UTILITY": {
+     "prepares": 0.5068,
+     "other_takes": 0.2961,
+     "nothing": 0.1971,
+     "winners": 0.514,
+     "losers": 0.4988
+    }
+   },
+   "CHALLENGER": {
+    "JUNGLE": {
+     "prepares": 0.5354,
+     "other_takes": 0.2782,
+     "nothing": 0.1864,
+     "winners": 0.53,
+     "losers": 0.5417
+    },
+    "UTILITY": {
+     "prepares": 0.5297,
+     "other_takes": 0.2765,
+     "nothing": 0.1938,
+     "winners": 0.542,
+     "losers": 0.5159
+    }
+   }
+  },
+  "takes_it": {
+   "JUNGLE": {
+    "prepares": 54.6,
+    "reset": 39.6,
+    "other spot and gets something": 53.6,
+    "other spot and nothing": 47.5
+   },
+   "UTILITY": {
+    "prepares": 55.0,
+    "reset": 42.6,
+    "other spot and gets something": 53.3,
+    "other spot and nothing": 43.4
+   }
+  },
+  "before": 45,
+  "zone": 4000.0
+ }
+}
